@@ -1,0 +1,1411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xml:lang="en-GB" xmlns="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:georss="http://www.georss.org/georss" xmlns:thr="http://purl.org/syndication/thread/1.0">
+<title type="text">Terence Eden’s Blog</title>
+<subtitle type="text"/>
+<updated>2023-04-17T12:40:55Z</updated>
+<link href="https://shkspr.mobi/blog" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/feed/atom/</id>
+<link href="https://shkspr.mobi/blog/feed/atom/" rel="self" type="application/atom+xml"/>
+<generator uri="https://wordpress.org/" version="6.2">WordPress</generator>
+<icon>https://shkspr.mobi/blog/wp-content/uploads/2020/02/cropped-avatar-32x32.jpg</icon>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">wget is much faster than scp or rsync</title>
+<link href="https://shkspr.mobi/blog/2023/04/wget-is-much-faster-than-scp-or-rsync/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45526</id>
+<updated>2023-04-17T12:40:55Z</updated>
+<published>2023-04-17T11:34:08Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="HowTo"/><category scheme="https://shkspr.mobi/blog" term="linux"/>
+<summary type="html">I needed to copy 3TB of data from my old homeserver to my new one. I decided to spend as much time "sharpening my axe" as possible. I spent ages dicking around with ZFS configs, tweaking BIOS settings, flashing firmware, and all the other yak-shaving necessary for convincing yourself you're doing useful work. Then I [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/wget-is-much-faster-than-scp-or-rsync/">&lt;p&gt;I needed to copy 3TB of data from my old homeserver to my new one.  I decided to spend as much time "&lt;a href="https://quoteinvestigator.com/2014/03/29/sharp-axe/"&gt;sharpening my axe&lt;/a&gt;" as possible. I spent ages dicking around with ZFS configs, tweaking BIOS settings, flashing firmware, and all the other yak-shaving necessary for convincing yourself you're doing useful work.&lt;/p&gt;
+&lt;p&gt;Then I started testing large file transfers. Both &lt;code&gt;scp&lt;/code&gt; and &lt;code&gt;rsync&lt;/code&gt; started well - transferring files at around 112MBps. That pretty much saturated my Gigabit link. Nice! This was going to take no time at all...&lt;/p&gt;
+&lt;p&gt;And then, after a few GB of a single large file had transferred, the speed slowed to a crawl. Eventually dropping to about 16MBps where it stayed for the majority of the transfer.&lt;/p&gt;
+&lt;p&gt;I spent ages futzing around with the various options. Disabling encryption, disabling compression, flicking obscure switches. I  tried using an SSD as a ZIL. I rebuilt my ZFS pool as a MDADM RAID. I mounted disks individually. Nothing seemed to work. It seemed that &lt;em&gt;something&lt;/em&gt; was filling a buffer &lt;em&gt;somewhere&lt;/em&gt; when I used &lt;code&gt;scp&lt;/code&gt; or &lt;code&gt;rsync&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;So I tried a speed test.  Using &lt;code&gt;curl&lt;/code&gt; I could easily hit my ISP's limit of 70MBps (about 560Mbps).&lt;/p&gt;
+&lt;p&gt;It was getting late and I wanted to start the backup before going to bed. Time for radical action!&lt;/p&gt;
+&lt;p&gt;On the sending server, I opened a new &lt;code&gt;tmux&lt;/code&gt; and ran:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;cd /my/data/dir/
+python3 -m http.server 1234
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That starts a webserver which lists all the files and folders in that directory.&lt;/p&gt;
+&lt;p&gt;On the receiving server, I opened a new &lt;code&gt;tmux&lt;/code&gt; and ran:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;wget --mirror http://server.ip.address:1234/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That downloads all the files that it sees, follows all the directories and subdirectories, and recreates them on the server.&lt;/p&gt;
+&lt;p&gt;After running overnight, the total transfer speed reported by &lt;code&gt;wget&lt;/code&gt; was about 68MBps. Not exactly saturating my link - but better than the puny throughput I experienced earlier.&lt;/p&gt;
+&lt;h2 id='downsides'&gt;&lt;a href='#downsides' class='heading-link'&gt;Downsides&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There are a few (minor) problems with this approach.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;No encryption. As this was a LAN transfer, I didn't really care.&lt;/li&gt;
+&lt;li&gt;No preservation of Linux attributes. I didn't mind losing metadata.&lt;/li&gt;
+&lt;li&gt;No directory timestamps. Although &lt;em&gt;file&lt;/em&gt; timestamps are preserved.&lt;/li&gt;
+&lt;li&gt;An &lt;code&gt;index.html&lt;/code&gt; file is stored every directory. I couldn't find an option to turn that off.
+&lt;ul&gt;
+&lt;li&gt;They can be deleted with &lt;code&gt;find . -newermt &amp;#039;2023-04-01&amp;#039; \! -newermt &amp;#039;2023-04-03&amp;#039; -name &amp;#039;index.html&amp;#039; -delete&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;It all just feels a bit icky. But, hey, if it's stupid and it works; it isn't stupid.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I'm sure someone in the comments will tell me exactly which obscure setting I needed to turn on to make &lt;code&gt;scp&lt;/code&gt; work at the same speed as &lt;code&gt;wget&lt;/code&gt;. But this was a quick way to transfer a bunch of large files with the minimum of fuss.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/wget-is-much-faster-than-scp-or-rsync/#comments" rel="replies" thr:count="5" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/wget-is-much-faster-than-scp-or-rsync/feed/atom/" rel="replies" thr:count="5" type="application/atom+xml"/>
+<thr:total>5</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">ZFS - how to use a file as a ZIL</title>
+<link href="https://shkspr.mobi/blog/2023/04/zfs-how-to-use-a-file-as-a-zil/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45518</id>
+<updated>2023-04-02T12:37:43Z</updated>
+<published>2023-04-16T11:34:51Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="HowTo"/><category scheme="https://shkspr.mobi/blog" term="linux"/><category scheme="https://shkspr.mobi/blog" term="ZFS"/>
+<summary type="html">ZFS sometimes benefits from having a logging drive. Usually, you need to assign a whole device or partition to it. Unfortunately, I had already partitioned my SSD and didn't feel like repartitioning it. So, here's how to create a file, mount it as a loopback, and then assign it to your ZFS pool as a [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/zfs-how-to-use-a-file-as-a-zil/">&lt;p&gt;ZFS sometimes benefits from having a logging drive. Usually, you need to assign a whole device or partition to it. Unfortunately, I had already partitioned my SSD and didn't feel like repartitioning it.&lt;/p&gt;
+&lt;p&gt;So, here's how to create a file, mount it as a loopback, and then assign it to your ZFS pool as a logging drive.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Create a 1GB file somewhere on your SSD:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;fallocate -l 1G zil.img&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Mount the file as a loopback device:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;sudo losetup -fP zil.img&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Find the name of the new loopback device:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;losetup -a&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Add the new loopback device to your pool:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;sudo zpool add your_pool log /dev/loop123&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Wait a few moments and then check it has been added using:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;zpool status&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Note - the loop won't be recreated after a reboot, so your ZFS will be a bit grumpy.  Remove it with:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;sudo zpool remove data loop123&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Is there any point in doing this? No, not really. In my brief experiments it didn't make any appreciable different to the speed of my writes. Your use-case may be different though.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/zfs-how-to-use-a-file-as-a-zil/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/zfs-how-to-use-a-file-as-a-zil/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Movie Review: One Cut Of The Dead</title>
+<link href="https://shkspr.mobi/blog/2023/04/movie-review-one-cut-of-the-dead/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45504</id>
+<updated>2023-04-02T09:12:10Z</updated>
+<published>2023-04-15T11:34:13Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Movie Review"/>
+<summary type="html">Zombie films are always social commentary. The original Night of the Living Dead is a story of small-town racism and paranoia. One Cut Of The Dead is - if you'll pardon the pun - a cut above the rest of the zombie flicks. It asks some deep questions about cinema and the role of the [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/movie-review-one-cut-of-the-dead/">&lt;p&gt;&lt;img decoding="async" loading="lazy" src="https://shkspr.mobi/blog/wp-content/uploads/2023/04/Kamera-o-tomeru-na-japanese-movie-poster-md.jpg" alt="Movie poster. A Japanese man holds a movie camera while a young, blood-soaked Japanese woman is chased by zombies." width="264" height="378" class="alignleft size-full wp-image-45506" /&gt;Zombie films are &lt;em&gt;always&lt;/em&gt; social commentary. The original Night of the Living Dead is a story of small-town racism and paranoia.&lt;/p&gt;
+&lt;p&gt;One Cut Of The Dead is - if you'll pardon the pun - a cut above the rest of the zombie flicks. It asks some deep questions about cinema and the role of the audience. Are we morally culpable for the actions that occur on-screen? Without us, there is no bloodshed. Without our insatiable desire for more blood, more gore, more torture - there is no pain and suffering.&lt;/p&gt;
+&lt;p&gt;And what's the camera's role in all this? We willingly suspend our disbelief that there's a magic window into this world that none of the characters can see. It's like &lt;em&gt;we're&lt;/em&gt; the one hungering for brains and the poor cameraman is merely our fungus-driven avatar.&lt;/p&gt;
+&lt;p&gt;The first act of One Cut is stunning. There's no other way to describe its audacity. It's a schlocky splatter-fest which, as the name suggests, is filmed in a single take. It plays on every trope in the bloody genre, it pillages every classic scene from Blair Witch to Zombieland, and it drenches every cast member in gallons of blood.&lt;/p&gt;
+&lt;p&gt;Yes, it is low-budget ($25,000!) but it takes a lot of skill and effort to make things look so cheap and tawdry and &lt;em&gt;exciting&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;I don't want to spoil the rest of the film, but it will leave your head spinning off its axis.  It's the sort of film that's done backwards and in high-heels.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/movie-review-one-cut-of-the-dead/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/movie-review-one-cut-of-the-dead/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Stop treating eBooks like paper books</title>
+<link href="https://shkspr.mobi/blog/2023/04/stop-treating-ebooks-like-paper-books/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45470</id>
+<updated>2023-04-01T16:29:54Z</updated>
+<published>2023-04-14T11:34:31Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="ebook"/><category scheme="https://shkspr.mobi/blog" term="epub"/><category scheme="https://shkspr.mobi/blog" term="HTML"/><category scheme="https://shkspr.mobi/blog" term="rant"/>
+<summary type="html">As part of my never-ending quest to banish this skeuomorph from the world… I was reading a fascinating eBook recently which was, sadly, designed to mimic a legacy / paper book. To the point where the authoring software had hard-coded in page numbers and forced them to be displayed. Here's what it looked like: There [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/stop-treating-ebooks-like-paper-books/">&lt;p&gt;As part of my never-ending quest to banish this skeuomorph from the world…&lt;/p&gt;
+&lt;p&gt;I was reading a fascinating eBook recently which was, sadly, designed to mimic a legacy / paper book. To the point where the authoring software had hard-coded in page numbers and forced them to be displayed.&lt;/p&gt;
+&lt;p&gt;Here's what it looked like:&lt;/p&gt;
+&lt;p&gt;&lt;img decoding="async" loading="lazy" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/ebook-pages.png" alt="Screenshot of a page of an eBook. The page number splits the page in half. Footnotes are visible at the bottom of the bisected page." width="1091" height="520" class="aligncenter size-full wp-image-45499" /&gt;&lt;/p&gt;
+&lt;p&gt;There are two abominations here. There's no need to interrupt the reading experience by bisecting a page and displaying the page numbers. And there's no need to put footnotes at the actual foot of the artificial page.&lt;/p&gt;
+&lt;p&gt;The whole point of an eBook is to free the reader from the tyranny of the publisher's choices. If the reader wants to justify the text, change the font, hide all footnotes, or has strong opinions about &lt;a href="https://www.indesignskills.com/tutorials/widows-and-orphans/"&gt;widows and orphans&lt;/a&gt; - they can choose a reading experience which suits their needs.&lt;/p&gt;
+&lt;p&gt;Let's take a look at the code behind the page and how it &lt;em&gt;should&lt;/em&gt; been written.&lt;/p&gt;
+&lt;h2 id='page-numbers'&gt;&lt;a href='#page-numbers' class='heading-link'&gt;Page numbers&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The HTML the book uses to show the page numbers is:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-html"&gt;   ...
+   &amp;lt;div class=&amp;quot;page-break&amp;quot;&amp;gt;end p.16&amp;lt;/div&amp;gt;
+   &amp;lt;div id=&amp;quot;page_16&amp;quot;&amp;gt; &amp;lt;/div&amp;gt;
+&amp;lt;/div&amp;gt;
+&amp;lt;div class=&amp;quot;page-bounds&amp;quot;&amp;gt;
+   &amp;lt;div id=&amp;quot;acprof-0195171276-div1-8c&amp;quot;&amp;gt;
+      &amp;lt;div class=&amp;quot;para&amp;quot;&amp;gt;
+         ...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The CSS is:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-css"&gt;div.page-break {
+    text-align: right;
+    line-height: 1px;
+    font-size: 10px;
+    color: #aca368;
+    border-bottom: 1px solid #706650;
+    padding: 3px 4px 8px 0px;
+    margin: 0px 2px 10px 0px;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;So, what &lt;em&gt;should&lt;/em&gt; it be?  I've previously &lt;a href="https://shkspr.mobi/blog/2020/11/how-do-you-raise-a-software-bug-with-a-book-publisher/"&gt;written about the support ePub has for page numbers&lt;/a&gt;. And the answer is well documented in the specification.&lt;/p&gt;
+&lt;p&gt;It's simply this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-html"&gt;&amp;lt;span epub:type=&amp;quot;pagebreak&amp;quot; id=&amp;quot;page_123_a&amp;quot; title=&amp;quot;123&amp;quot; /&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That inserts an invisible pagebreak. The reader can &lt;em&gt;choose&lt;/em&gt; to render one page per physical screen. Or they can &lt;em&gt;choose&lt;/em&gt; to display a page number. Or they can &lt;em&gt;choose&lt;/em&gt; to ignore the suggestion.&lt;/p&gt;
+&lt;h2 id='footnotes'&gt;&lt;a href='#footnotes' class='heading-link'&gt;Footnotes&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Here's the code as presented in the ePub:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-html"&gt;   &amp;lt;div class=&amp;quot;para&amp;quot;&amp;gt;Not only was that result in disagreement with the other trials made by the committee but also it was the direct opposite of the observations by Adams and De Luc, &amp;lt;/div&amp;gt;
+&amp;lt;/div&amp;gt;
+&amp;lt;div class=&amp;quot;footnote-inline&amp;quot;&amp;gt;
+   &amp;lt;div&amp;gt;15. See &amp;lt;span id=&amp;quot;xref-acprof-0195171276-bibItem-84c&amp;quot;&amp;gt;&amp;lt;a href=&amp;quot;content9.html#acprof-0195171276-bibItem-84&amp;quot;&amp;gt;De Luc 1772&amp;lt;/a&amp;gt;&amp;lt;/span&amp;gt;, 1:219-221, §408.&amp;lt;/div&amp;gt;
+&amp;lt;/div&amp;gt;
+&amp;lt;div class=&amp;quot;footnote-inline&amp;quot;&amp;gt;
+   &amp;lt;div&amp;gt;16. See ...&amp;lt;/div&amp;gt;
+&amp;lt;/div&amp;gt;
+&amp;lt;div class=&amp;quot;page-break&amp;quot;&amp;gt;end p.16&amp;lt;/div&amp;gt;
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;There's no need to put footnotes &lt;em&gt;alongside&lt;/em&gt; the text. If you do that, you're basically telling the reader that you know better than them how they want to read the book.  Most eReaders will pop-up a footnote, making it easy to read and easy to close:&lt;/p&gt;
+&lt;p&gt;&lt;img decoding="async" loading="lazy" src="https://shkspr.mobi/blog/wp-content/uploads/2023/04/footnote-popup.jpg" alt="Product photo of a Kindle showing the popup." width="900" height="650" class="aligncenter size-full wp-image-45500" /&gt;&lt;/p&gt;
+&lt;p&gt;The footnote link should have a specific ePub type, and the footnote itself is semantically represented as an &lt;code&gt;&amp;lt;aside&amp;gt;&lt;/code&gt; with it's own type:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-html"&gt;&amp;lt;p&amp;gt;The use of dilithium crystals was discouraged&amp;lt;a epub:type=&amp;quot;noteref&amp;quot; href=&amp;quot;#n1&amp;quot; id=&amp;quot;fn1&amp;quot;&amp;gt;1&amp;lt;/a&amp;gt;.&amp;lt;/p&amp;gt;
+
+&amp;lt;aside epub:type=&amp;quot;footnote&amp;quot; id=&amp;quot;n1&amp;quot;&amp;gt;
+    &amp;lt;p&amp;gt;&amp;lt;a epub:type=&amp;quot;noteref&amp;quot; href=&amp;quot;#fn1&amp;quot;&amp;gt;1.&amp;lt;/a&amp;gt; Scott, M (2257).&amp;lt;/p&amp;gt;
+&amp;lt;/aside&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The footnote text can be placed at the end of the chapter or the end of the book. No need to force it into the reader's eyeline.&lt;/p&gt;
+&lt;p&gt;There's also &lt;a href="https://kdp.amazon.com/en_US/help/topic/GH4DRT75GWWAGBTU#footnote_guideline"&gt;similar advice from Kindle&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id='what-have-we-learned-today'&gt;&lt;a href='#what-have-we-learned-today' class='heading-link'&gt;What have we learned today&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Books are magical. And, in my humble opinion, eBooks are &lt;em&gt;better&lt;/em&gt; than legacy paper books. I can boost the font size of my eBook rather than having to buy an expensive large-print version. I can navigate by searching, or by semantic features, rather than grubbing around with page numbers. And I can choose to follow a footnote or ignore it as the whim strikes me.&lt;/p&gt;
+&lt;p&gt;But all that requires the publishers actually understanding how to take advantage of the format.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/stop-treating-ebooks-like-paper-books/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/stop-treating-ebooks-like-paper-books/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">NextCloud Client Command Line</title>
+<link href="https://shkspr.mobi/blog/2023/04/nextcloud-client-command-line/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45487</id>
+<updated>2023-04-11T15:59:41Z</updated>
+<published>2023-04-13T11:34:11Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="HowTo"/><category scheme="https://shkspr.mobi/blog" term="linux"/><category scheme="https://shkspr.mobi/blog" term="nextcloud"/>
+<summary type="html">I have a headless server - one without a GUI - which I use as a NextCloud client. My laptop, phone, tablet, and server all sync with a cloud-based NextCloud instance. But, sadly, NextCloud don't offer a way for servers to speak to servers. If you try to run apt install nextcloud it will try [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/nextcloud-client-command-line/">&lt;p&gt;I have a headless server - one without a GUI - which I use as a NextCloud client. My laptop, phone, tablet, &lt;em&gt;and&lt;/em&gt; server all sync with a cloud-based NextCloud instance.&lt;/p&gt;
+&lt;p&gt;But, sadly, &lt;a href="https://github.com/nextcloud/desktop/issues/1203"&gt;NextCloud don't offer a way for servers to speak to servers&lt;/a&gt;. If you try to run &lt;code&gt;apt install nextcloud&lt;/code&gt; it will try to install 300MB of GUI dependencies which you just can't use.&lt;/p&gt;
+&lt;p&gt;Luckily, there's a way around all that! It's a bit convoluted, so here's a guide.&lt;/p&gt;
+&lt;h2 id='download-the-latest-appimage'&gt;&lt;a href='#download-the-latest-appimage' class='heading-link'&gt;Download the latest AppImage&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Grab the link for &lt;a href="https://github.com/nextcloud/desktop/releases/latest/"&gt;the most recent AppImage&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;On your server:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;mkdir nextcloudapp
+cd nextcloudapp
+wget https://github.com/nextcloud/desktop/releases/download/????.AppImage -O Nextcloud.AppImage
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Make it executable:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;chmod +x Nextcloud.AppImage
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Next, extract it:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./Nextcloud.AppImage --appimage-extract
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That will place all the files in &lt;code&gt;squashfs-root/&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;I moved all the files and folders out of there to a more convenient location.&lt;/p&gt;
+&lt;p&gt;You may need to install some dependencies:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install libgl1 libharfbuzz0b
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Finally, you need to export the libraries which were in the app image:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;export LD_LIBRARY_PATH=~/nextcloudapp/usr/lib
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='running-it'&gt;&lt;a href='#running-it' class='heading-link'&gt;Running it&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;I recommend creating an app specific password on your NextCloud admin interface.&lt;/p&gt;
+&lt;p&gt;You can run NextCloud as a one-off job using:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;./nextcloudcmd -u &amp;quot;MyUserName&amp;quot; -p &amp;quot;P4ssw0rd&amp;quot; /path/to/NextCloud/ https://your_online.nextcloud.example/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That will spit out a &lt;em&gt;lot&lt;/em&gt; of log files. You can make it run silently with the &lt;code&gt;-s&lt;/code&gt; option. Probably best to run it in a &lt;code&gt;tmux&lt;/code&gt;.&lt;/p&gt;
+&lt;h2 id='make-it-persistent'&gt;&lt;a href='#make-it-persistent' class='heading-link'&gt;Make it persistent&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Sadly, there's no way to &lt;a href="https://help.ubuntu.com/community/EnvironmentVariables#File-location_related_variables"&gt;permanently set the LD_LIBRARY_PATH&lt;/a&gt;. So you'll need to export the library each time you want to sync.&lt;/p&gt;
+&lt;p&gt;If only NextCloud offered a headless daemon. Ah well!&lt;/p&gt;
+&lt;h2 id='bugs'&gt;&lt;a href='#bugs' class='heading-link'&gt;Bugs&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There is a bug with the CLI version where it &lt;a href="https://github.com/nextcloud/desktop/issues/5591"&gt;won't download files with a colon in the filename&lt;/a&gt;.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/nextcloud-client-command-line/#comments" rel="replies" thr:count="2" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/nextcloud-client-command-line/feed/atom/" rel="replies" thr:count="2" type="application/atom+xml"/>
+<thr:total>2</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Building a new Microserver</title>
+<link href="https://shkspr.mobi/blog/2023/04/building-a-new-microserver/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45460</id>
+<updated>2023-04-12T10:42:50Z</updated>
+<published>2023-04-12T11:34:16Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="HowTo"/><category scheme="https://shkspr.mobi/blog" term="linux"/><category scheme="https://shkspr.mobi/blog" term="ubuntu"/>
+<summary type="html">Back in 2011, I bought an HP Proliant Microserver G6 for £250. Last week I upgraded to... A Proliant G8 for £270. Nice! Hurrah for Moore's Law! Of course, setting it up is a bit of a mare. So here's a tangled mess of notes to hopefully remind me what to do... Firmware Download the [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/building-a-new-microserver/">&lt;p&gt;Back in 2011, I bought an HP Proliant Microserver G6 for £250. Last week I upgraded to... A Proliant G8 for £270. Nice! Hurrah for Moore's Law!&lt;/p&gt;
+&lt;p&gt;Of course, setting it up is a bit of a mare. So here's a tangled mess of notes to hopefully remind me what to do...&lt;/p&gt;
+&lt;h2 id='firmware'&gt;&lt;a href='#firmware' class='heading-link'&gt;Firmware&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Download &lt;a href="https://support.hpe.com/connect/s/product?language=en_US&amp;ismnp=0&amp;l5oid=5379860&amp;kmpmoid=5390291&amp;cep=on&amp;tab=driversAndSoftware"&gt;the latest gen8 firmware / BIOS / iLO&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Find a site offering demo licence keys for iLO 4. &lt;!-- https://www.chathuraariyadasa.com/ho-ilo-license-activation-keys/ --&gt;&lt;/p&gt;
+&lt;h2 id='boot-order'&gt;&lt;a href='#boot-order' class='heading-link'&gt;Boot Order&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;I stuck in an SSD on the internal SATA port which is meant to be used for a DVD drive.&lt;/p&gt;
+&lt;p&gt;The internal RAID has to be set to "Legacy" - see &lt;a href="https://community.hpe.com/t5/proliant-servers-netservers/microserver-gen8-boot-order-from-different-sata-drive/m-p/6928066/highlight/true"&gt;Re: Microserver Gen8 - Boot order from different SATA Drive&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Then the PCI boot order has to be be set to boot #2 first.&lt;/p&gt;
+&lt;h2 id='bios'&gt;&lt;a href='#bios' class='heading-link'&gt;BIOS&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;There's no UEFI. So any USB stick that you format will need to be made with:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo dd bs=4M if=Downloads/ubuntu-whatever.iso of=/dev/sda conv=fdatasync status=progress
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Or &lt;a href="https://help.ubuntu.com/community/mkusb/dus-iso2usb"&gt;mkusb&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;It will take ages from boot until it starts installing.&lt;/p&gt;
+&lt;h2 id='install'&gt;&lt;a href='#install' class='heading-link'&gt;Install&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;As per normal. Enable SSH when asked.&lt;/p&gt;
+&lt;h2 id='make-2nd-ethernet-port-optional-to-prevent-a-slow-start'&gt;&lt;a href='#make-2nd-ethernet-port-optional-to-prevent-a-slow-start' class='heading-link'&gt;Make 2nd Ethernet Port Optional to prevent a slow start&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;As per &lt;a href="https://askubuntu.com/a/1323542/82046"&gt;StackOverflow&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Edit &lt;code&gt;/etc/netplan/*.yaml&lt;/code&gt; and make the 2nd port &lt;code&gt;optional: true&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;Make sure the root disk is taking up all the available space:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo lvextend -l 100%VG ubuntu-vg/ubuntu-lv
+fdisk -l /dev/mapper/ubuntu--vg-ubuntu--lv
+sudo fdisk -l /dev/mapper/ubuntu--vg-ubuntu--lv
+sudo resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='smart'&gt;&lt;a href='#smart' class='heading-link'&gt;SMART&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Check the HDD quality.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install smartmontools
+sudo smartctl --all /dev/sda
+sudo smartctl --all /dev/sdb
+...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='zfs'&gt;&lt;a href='#zfs' class='heading-link'&gt;ZFS&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Install ZFS&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install zfsutils-linux
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Get the list of disks so you can refer to them by ID:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ls -l /dev/disk/by-id/ 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Create a RAIDZ with somewhat optimal values:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo zpool create -O utf8only=on -O normalization=formD -O atime=off -O compression=lz4 -o ashift=12 -O dedup=off -f data raidz  /dev/disk/by-id/ata-... /dev/disk/by-id/ata-... /dev/disk/by-id/ata-... /dev/disk/by-id/ata-...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That gives it UTF8, improved performance by not using access times, no deduplication, sensible block size, and transparent compression.&lt;/p&gt;
+&lt;p&gt;Check it has worked with:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;zfs list
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Take ownership of the pool:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo chown $(whoami): /data
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Check the pool's health:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo zpool scrub data
+sudo zpool status
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Make it chunter a little less with:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo nano /etc/modprobe.d/zfs.conf:
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And adding the line:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;options zfs zfs_txg_timeout=30
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Add the following &lt;code&gt;~/.profile&lt;/code&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;df -t ext4 -t zfs -Th
+zpool status
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='read-only-share'&gt;&lt;a href='#read-only-share' class='heading-link'&gt;Read-Only Share&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;sudo apt install nfs-kernel-server
+sudo systemctl start nfs-kernel-server.service
+sudo nano /etc/exports
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Add:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/data  *(ro,async,root_squash,insecure)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Restart with:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo exportfs -a
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='make-ubuntu-less-chatty-on-login'&gt;&lt;a href='#make-ubuntu-less-chatty-on-login' class='heading-link'&gt;Make Ubuntu less chatty on login&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;sudo rm /etc/update-motd.d/88-esm-announce
+sudo apt-get purge landscape-client landscape-common
+sudo rm /etc/apt/apt.conf.d/20apt-esm-hook.conf
+sudo rm /var/lib/ubuntu-advantage/messages/motd-esm-announce
+sudo touch /etc/cloud/cloud-init.disabled
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='set-up-pythons-pip'&gt;&lt;a href='#set-up-pythons-pip' class='heading-link'&gt;Set Up Python's pip&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;wget https://bootstrap.pypa.io/get-pip.py
+python3 get-pip.py
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='misc'&gt;&lt;a href='#misc' class='heading-link'&gt;Misc&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Set the right timezone:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo timedatectl set-timezone Europe/London
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Update the certificates&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;sudo update-ca-certificates
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id='and'&gt;&lt;a href='#and' class='heading-link'&gt;And...?&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;What else do &lt;em&gt;you&lt;/em&gt; install on a new server?&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/building-a-new-microserver/#comments" rel="replies" thr:count="4" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/building-a-new-microserver/feed/atom/" rel="replies" thr:count="4" type="application/atom+xml"/>
+<thr:total>4</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">MSc Dissertation: Exploring the visualisation of hierarchical cybersecurity data within the Metaverse</title>
+<link href="https://shkspr.mobi/blog/2023/04/msc-dissertation-exploring-the-visualisation-of-hierarchical-cybersecurity-data-within-the-metaverse/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=44368</id>
+<updated>2023-04-11T11:33:27Z</updated>
+<published>2023-04-11T11:34:26Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="metaverse"/><category scheme="https://shkspr.mobi/blog" term="MSc"/>
+<summary type="html">Well gang, I did it! After two years I've finally finished my MSc! My final project was a 10,901 word epic about... The ✨Metaverse✨. Have I gone a little bit peculiar? No. I don't think so. I was advised to pick a project which would sustain my interest for 6 months. So I chose something [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/msc-dissertation-exploring-the-visualisation-of-hierarchical-cybersecurity-data-within-the-metaverse/">&lt;p&gt;Well gang, I did it! After two years I've &lt;em&gt;finally&lt;/em&gt; finished my MSc!&lt;/p&gt;
+&lt;p&gt;My final project was a 10,901 word epic about... The &lt;em&gt;✨Metaverse✨&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Have I gone a little bit peculiar? No. I don't think so.  I was advised to pick a project which would sustain my interest for 6 months. So I chose something which would have lots of modern papers to read.  And, more importantly, justify me buying a new toy to play with&lt;sup id="fnref-44368-money"&gt;&lt;a href="#fn-44368-money" class="jetpack-footnote" title="I bought a Quest 2, using my own money, from a friend who was bored of it. No taxpayer money was spent."&gt;1&lt;/a&gt;&lt;/sup&gt;!&lt;/p&gt;
+&lt;p&gt;I was delighted and overwhelmed that it received a score of 80% - &lt;a href="https://shkspr.mobi/blog/2023/04/msc-completed/"&gt;taking my overall grade to a Distinction&lt;/a&gt;. Nice 😎&lt;/p&gt;
+&lt;h2 id='what-was-it-about'&gt;&lt;a href='#what-was-it-about' class='heading-link'&gt;What was it about&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Have you ever had a spreadsheet that was too large to fit on your monitor?  Have you ever needed to explore a database full of complex relational material, but felt restricted by your screen's size?&lt;/p&gt;
+&lt;p&gt;That's a problem that we regularly face at work.  So what's it like to view and manipulate data in the Metaverse?&lt;/p&gt;
+&lt;p&gt;&lt;iframe loading="lazy" class="youtube-player" width="620" height="349" src="https://www.youtube.com/embed/HpyYIT0kSZk?version=3&amp;#038;rel=1&amp;#038;showsearch=0&amp;#038;showinfo=1&amp;#038;iv_load_policy=1&amp;#038;fs=1&amp;#038;hl=en-GB&amp;#038;autohide=2&amp;#038;wmode=transparent" allowfullscreen="true" style="border:0;" sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"&gt;&lt;/iframe&gt;&lt;/p&gt;
+&lt;p&gt;Do people enjoy the experience? Do they find it useful? Does it cause them physical distress? What are their attitudes to the Metaverse in general? Is this the future?&lt;/p&gt;
+&lt;p&gt;The answers were: yes, maybe, not really, mixed to poor, possibly.&lt;/p&gt;
+&lt;h2 id='read-all-about-it'&gt;&lt;a href='#read-all-about-it' class='heading-link'&gt;Read all about it&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;I've released the paper as Creative Commons Attribution Non-Commercial.&lt;/p&gt;
+&lt;p&gt;You can &lt;a href="https://edent.codeberg.page/MSc_Dissertation/output/Eden%2C%20Terence%20-%20Exploring%20the%20visualisation%20of%20hierarchical%20cybersecurity%20data%20within%20the%20Metaverse.html"&gt;read my dissertation online&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Or, you can download the following formats:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://codeberg.org/edent/MSc_Dissertation/raw/branch/main/output/Eden%2C%20Terence%20-%20Exploring%20the%20visualisation%20of%20hierarchical%20cybersecurity%20data%20within%20the%20Metaverse.epub"&gt;ePub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://codeberg.org/edent/MSc_Dissertation/raw/branch/main/output/Eden%2C%20Terence%20-%20Exploring%20the%20visualisation%20of%20hierarchical%20cybersecurity%20data%20within%20the%20Metaverse.pdf"&gt;PDF&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Or you can grab the &lt;a href="https://codeberg.org/edent/MSc_Dissertation/"&gt;MarkDown or HTML from my open source repository&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id='publication'&gt;&lt;a href='#publication' class='heading-link'&gt;Publication?&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;I've no idea how I &lt;em&gt;properly&lt;/em&gt; publish something like this. I guess I need a DOI and to submit it somewhere? If you have any experience in this area, please let me know.&lt;/p&gt;
+&lt;div class="footnotes"&gt;
+&lt;hr /&gt;
+&lt;ol&gt;
+&lt;li id="fn-44368-money"&gt;
+I bought a Quest 2, using my own money, from a friend who was bored of it. No taxpayer money was spent.&amp;#160;&lt;a href="#fnref-44368-money" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/msc-dissertation-exploring-the-visualisation-of-hierarchical-cybersecurity-data-within-the-metaverse/#comments" rel="replies" thr:count="6" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/msc-dissertation-exploring-the-visualisation-of-hierarchical-cybersecurity-data-within-the-metaverse/feed/atom/" rel="replies" thr:count="6" type="application/atom+xml"/>
+<thr:total>6</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">3 years of domestic solar stats in the UK</title>
+<link href="https://shkspr.mobi/blog/2023/04/3-years-of-domestic-solar-stats-in-the-uk/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45446</id>
+<updated>2023-04-09T19:37:45Z</updated>
+<published>2023-04-10T11:34:49Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Open Data"/><category scheme="https://shkspr.mobi/blog" term="solar"/>
+<summary type="html">After 3 full years of having solar panels on our London roof, they've generated 11,950kWh of electricity. Nice! Here's how those three years look, according to our smart meter. kWh Solar Generation 11,950 Solar Export 7,346 Grid Import 7,521 Quick maths! The difference between the generation and the export is our solar consumption: 4,604kWh over [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/3-years-of-domestic-solar-stats-in-the-uk/">&lt;p&gt;After 3 full years of having solar panels on our London roof, they've generated 11,950kWh of electricity. Nice!&lt;/p&gt;
+&lt;p&gt;Here's how those three years look, according to our &lt;a href="https://shkspr.mobi/blog/2020/04/how-to-take-solar-export-readings-on-the-honeywell-as302p-smart-meter/"&gt;smart meter&lt;/a&gt;.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th align="right"&gt;&lt;/th&gt;
+&lt;th align="right"&gt;kWh&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td align="right"&gt;Solar Generation&lt;/td&gt;
+&lt;td align="right"&gt;11,950&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td align="right"&gt;Solar Export&lt;/td&gt;
+&lt;td align="right"&gt;7,346&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td align="right"&gt;Grid Import&lt;/td&gt;
+&lt;td align="right"&gt;7,521&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id='quick-maths'&gt;&lt;a href='#quick-maths' class='heading-link'&gt;Quick maths!&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The difference between the generation and the export is our solar consumption: 4,604kWh over 3 years.&lt;/p&gt;
+&lt;p&gt;So we directly use about 38% of the solar we generate. The remaining 62% gets &lt;a href="https://shkspr.mobi/blog/2020/04/some-thoughts-on-selling-electricity-back-to-the-grid/"&gt;sold back to the grid&lt;/a&gt;. I thought our consumption would be higher; we work from home during daylight hours and we have a modest &lt;a href="https://shkspr.mobi/blog/2020/11/review-moixa-battery/"&gt;2kWh battery&lt;/a&gt;.  But it is exactly in line with &lt;a href="https://shkspr.mobi/blog/2021/03/1-year-of-edent_solar-we-are-100-offset/"&gt;what we were seeing after one year&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Our solar consumption and grid import is the total electricity that we used: 12,125kWh over 3 years.&lt;/p&gt;
+&lt;p&gt;The &lt;a href="https://www.ovoenergy.com/guides/energy-guides/how-much-electricity-does-a-home-use"&gt;average UK home uses around 3,800kWh of electricity per year&lt;/a&gt;. We're a bit higher than that. Despite all our energy efficiency measures, we use about 4,000kWh per year.&lt;/p&gt;
+&lt;p&gt;That means, on average, &lt;strong&gt;solar produced 99% of our electricity needs&lt;/strong&gt; across three years!&lt;/p&gt;
+&lt;p&gt;You can &lt;a href="https://shkspr.mobi/blog/2020/03/relaunching-edent_solar-part-1-installation/"&gt;read more about our solar installation&lt;/a&gt; if you'd like to understand the number of panels, details of the inverter, and other technical gubbins.&lt;/p&gt;
+&lt;h2 id='money-money-money'&gt;&lt;a href='#money-money-money' class='heading-link'&gt;Money Money Money&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;People always ask how much the panels cost. That's a difficult question to answer. Every house is different. We have a 3 storey house, which meant extra costs for scaffolding. Our roof was in decent shape, so didn't need reinforcement - and we sold the tiles which were removed. The panels we wanted weren't in stock, so we got a slight discount. Etc etc etc. Basically, go get a couple of quotes and see how much it will cost in your specific circumstances.&lt;/p&gt;
+&lt;p&gt;The next question is about how much money it has saved us. Again, that's slightly complicated. Energy prices have been "interesting" in the UK. At an average price of 30p/kWh, the panels have saved us about £1,400 over the three years.&lt;/p&gt;
+&lt;p&gt;But! &lt;a href="https://shkspr.mobi/blog/2022/08/solar-panels-payback-time-during-rising-energy-costs/"&gt;We also &lt;em&gt;sell&lt;/em&gt; the excess electricity&lt;/a&gt;. We get paid a variable amount depending on demand - usually between 15p to 30p per kWh. By my calculations, we've sold about £1,500 worth of electricity over 3 years.&lt;/p&gt;
+&lt;p&gt;Let's call it a total saving of £1,000 per year.  If electricity prices go higher, we'll save more. If they drop, we'll save less.&lt;/p&gt;
+&lt;h2 id='open-data'&gt;&lt;a href='#open-data' class='heading-link'&gt;Open Data&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Every day, a robot uploads &lt;a href="https://gitlab.com/edent/solar-data/-/blob/main/README.md"&gt;our solar generation data to GitLab&lt;/a&gt; where it is freely available for research purposes.  The &lt;a href="https://shkspr.mobi/blog/2020/07/1800-days-of-minute-by-minute-solar-generation-data/"&gt;solar stats from our previous home are also available&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id='%e2%98%80%ef%b8%8f'&gt;&lt;a href='#%e2%98%80%ef%b8%8f' class='heading-link'&gt;☀️&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Solar "just works". Yes, even in dreary, rainy, cloudy, foggy UK.  Yes, even if your roof doesn't face the optimal direction. Yes, there is a large up-front cost. But even with the current technology, solar is a completely viable way to generate your own electricity and save money.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/3-years-of-domestic-solar-stats-in-the-uk/#comments" rel="replies" thr:count="1" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/3-years-of-domestic-solar-stats-in-the-uk/feed/atom/" rel="replies" thr:count="1" type="application/atom+xml"/>
+<thr:total>1</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: The Constant Sinner - Mae West</title>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-constant-sinner-mae-west/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45203</id>
+<updated>2023-03-25T11:22:51Z</updated>
+<published>2023-04-09T11:34:19Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/>
+<summary type="html">Yes, that Mae West wrote a novel. And it is a corker. Unabashedly sexy, druggy, provocative, and daringly modern. You can read the whole thing in West's voice: “It’s all right, Charlie,” she said. “I won’t hurt him. I only want to feel his muscles.” Every line just sizzles off the page. As with any [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/book-review-the-constant-sinner-mae-west/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/9781590774809.jpg" alt="Book cover featuring a sultry blonde woman." width="200" class="alignleft size-full wp-image-45204" /&gt;Yes, &lt;em&gt;that&lt;/em&gt; Mae West wrote a novel. And it is a &lt;em&gt;corker&lt;/em&gt;. Unabashedly sexy, druggy, provocative, and daringly modern.  You can read the whole thing in West's voice:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  “It’s all right, Charlie,” she said. “I won’t hurt him. I only want to feel his muscles.”
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;Every line just sizzles off the page. As with any 90 year old book, you might have to translate some of the slang:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  “the true story dope I’m commencin’ in the World. You’ll be gettin’ your sheets in Dutch if you spill that line of apple mush.”
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;West's command of the English language is superb. She captures the essence of characters in just a few scraps of dialogue. This is the way she describes a boxing match:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  On the roped raft under the sharp light, pale and dark flesh see-sawed, tugged, strained, wrenched, pounded, staggered dizzily and blindly sputtered back and forth like sparks in a candle flame, with the white wick of the referee’s arm always breaking them up.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;But, fair warning, a lot of the language is... &lt;em&gt;very&lt;/em&gt; of its time. Every racial slur you've ever heard - and a few you haven't - are liberally deployed. It makes for uncomfortable reading. But it is important to understand the context - when the play of The Constant Sinner was first performed, critics were outraged that &lt;a href="https://en.wikipedia.org/wiki/Lorenzo_Tucker"&gt;a Black actor was kissing the white Mae West&lt;/a&gt;. The book revels in its controversy - the titular character is an equal opportunity sinner.&lt;/p&gt;
+&lt;p&gt;And that's sort of the point of the story.  It uses racism to titillate, shock, and castigate society. It deploys sexism as a weapon to humiliate the patriarchy. It takes you on a dazzling tour of the seedy underbelly and condemns you as a perverted voyeur.  The sinner is, in the end, you.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-constant-sinner-mae-west/#comments" rel="replies" thr:count="1" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-constant-sinner-mae-west/feed/atom/" rel="replies" thr:count="1" type="application/atom+xml"/>
+<thr:total>1</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Are there any modern closed-source programming languages?</title>
+<link href="https://shkspr.mobi/blog/2023/04/are-there-any-modern-closed-source-programming-languages/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45420</id>
+<updated>2023-04-08T19:36:15Z</updated>
+<published>2023-04-08T11:34:25Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="code"/><category scheme="https://shkspr.mobi/blog" term="Open Source"/><category scheme="https://shkspr.mobi/blog" term="programming"/>
+<summary type="html">At a recent OpenUK meetup, one of the participants declared that Open Source had comprehensively won. While businesses might not always release their proprietary source code, 100% of everything they wrote used an open source programming language. I wondered how true that was. You can, perhaps, moan about the shenanigans around Java's licencing and you [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/are-there-any-modern-closed-source-programming-languages/">&lt;p&gt;At a recent &lt;a href="https://openuk.uk/"&gt;OpenUK&lt;/a&gt; meetup, one of the participants declared that Open Source had comprehensively won. While businesses might not always &lt;em&gt;release&lt;/em&gt; their proprietary source code, 100% of everything they wrote used an open source programming language.&lt;/p&gt;
+&lt;p&gt;I wondered how true that was. You can, perhaps, moan about &lt;a href="https://www.bbc.co.uk/news/technology-56639088"&gt;the shenanigans around Java's licencing&lt;/a&gt; and you mutter about whether it is easy to get involved with C++'s &lt;a href="https://isocpp.org/std/the-committee"&gt;JTC1/SC22/WG21&lt;/a&gt; - but the core tech behind the two is open. Anyone can read the language specification freely and anyone can build a compiler legally.&lt;/p&gt;
+&lt;p&gt;It's the same with, to choose a random smattering, &lt;a href="https://github.com/python/cpython"&gt;Python&lt;/a&gt;, &lt;a href="https://github.com/dotnet/fsharp/"&gt;F#&lt;/a&gt;, and even &lt;a href="https://github.com/apple/swift"&gt;Apple's Swift&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Once upon a time, Flash ruled the roost. Now Flash is dead&lt;sup id="fnref-45420-gordon"&gt;&lt;a href="#fn-45420-gordon" class="jetpack-footnote" title="Flash may be dead but... Clip from the movie &amp;quot;Flash Gordon&amp;quot;. Brian Blessed's character says &amp;quot;Gordon's Alive!?&amp;quot;"&gt;1&lt;/a&gt;&lt;/sup&gt;. While COBOL existed before the term Open Source was coined, it is now an open specification with a &lt;a href="https://gnucobol.sourceforge.io/"&gt;GPL Compiler&lt;/a&gt;. Everything has become open!&lt;/p&gt;
+&lt;p&gt;But...&lt;/p&gt;
+&lt;p&gt;There is still a stronghold of proprietary languages. &lt;a href="https://uk.mathworks.com/products/matlab.html"&gt;MATLAB&lt;/a&gt; is still heavily used by mathematicians and scientists. Languages like R are Open Source and making great in-roads. But MATLAB is popular.&lt;/p&gt;
+&lt;p&gt;The &lt;a href="https://kx.com/"&gt;K Language&lt;/a&gt; is widely used in financial firms.&lt;/p&gt;
+&lt;p&gt;Excel Macros, inexplicably, run the world.&lt;/p&gt;
+&lt;p&gt;Local scripting languages like AppleScript, and cloud languages like Google App Scripts are also closed - and can only run on proprietary software.&lt;/p&gt;
+&lt;p&gt;In the gaming world - while Lua and Godot and Blender are open - Unity is the big beast. And that's closed.&lt;/p&gt;
+&lt;p&gt;And, deep down in the silicon, the microcode running on your CPU, the blob in your Pi's multimedia decoder, and the baseband of your phone's modem are all locked down tighter than a whalebone corset.&lt;/p&gt;
+&lt;p&gt;But...&lt;/p&gt;
+&lt;p&gt;Even in those closed gardens, the weeds of Open Source take root. There are hundreds of Open Source libraries, plugins, and tutorials for all proprietary languages.  That doesn't get us to an open compiler or specification, but it brings the culture of Open Source with it.&lt;/p&gt;
+&lt;p&gt;So, has Open Source won? Mostly, I'd say. At the very least there are good Open Source alternatives to nearly every programming language and paradigm.&lt;/p&gt;
+&lt;p&gt;There are some niches - science, finance, gaming - which rely on proprietary languages. And Cloud services run custom software on their custom OS running on custom processors.  The new paradigm of LLM AI might eventually be fully open, but rely on processing power so out of reach of mortals that it might as well be closed.&lt;/p&gt;
+&lt;p&gt;But as more and more students become aware of Open Source, I hope that those last bastions of jealously guarded code will eventually fall.&lt;/p&gt;
+&lt;p&gt;Got any more examples of proprietary languages? &lt;a href="https://mastodon.social/@Edent/110082980566230545"&gt;Join the discussion on Mastodon&lt;/a&gt;&lt;/p&gt;
+&lt;div class="footnotes"&gt;
+&lt;hr /&gt;
+&lt;ol&gt;
+&lt;li id="fn-45420-gordon"&gt;
+Flash may be dead but... &lt;video muted autoplay loop&gt;&lt;source src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/gordons-alive.mp4" type="video/mp4" width="320"&gt;Clip from the movie "Flash Gordon". Brian Blessed's character says "Gordon's Alive!?"&lt;/video&gt;&amp;#160;&lt;a href="#fnref-45420-gordon" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/are-there-any-modern-closed-source-programming-languages/#comments" rel="replies" thr:count="4" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/are-there-any-modern-closed-source-programming-languages/feed/atom/" rel="replies" thr:count="4" type="application/atom+xml"/>
+<thr:total>4</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">SIP on Android - Sipgate and Linphone</title>
+<link href="https://shkspr.mobi/blog/2023/04/sip-on-android-sipgate-and-linphone/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45413</id>
+<updated>2023-03-24T10:44:09Z</updated>
+<published>2023-04-07T11:34:42Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="android"/><category scheme="https://shkspr.mobi/blog" term="sip"/><category scheme="https://shkspr.mobi/blog" term="voip"/>
+<summary type="html">Three years ago, I wrote about how you could add SIP calls to Android for free. Android had a well-integrated system which made VoIP calling a first-class citizen on its handsets. Sadly, Google killed native SIP calling in Android 12. FFS! It's relatively easy to get it set up again, although you'll need to install [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/sip-on-android-sipgate-and-linphone/">&lt;p&gt;Three years ago, I wrote about how you could &lt;a href="https://shkspr.mobi/blog/2020/07/adding-sip-calls-to-android-for-free/"&gt;add SIP calls to Android for free&lt;/a&gt;.  Android had a well-integrated system which made VoIP calling a first-class citizen on its handsets.&lt;/p&gt;
+&lt;p&gt;Sadly, &lt;a href="https://www.xda-developers.com/android-12-killing-native-sip-calling/"&gt;Google killed native SIP calling in Android 12&lt;/a&gt;. FFS!&lt;/p&gt;
+&lt;p&gt;It's relatively easy to get it set up again, although you'll need to install a separate app.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Sign up for a &lt;a href="https://www.sipgate.co.uk/"&gt;free Sipgate account&lt;/a&gt;. That will get you a UK phone number (+44), username, and password.&lt;/li&gt;
+&lt;li&gt;Install &lt;a href="https://play.google.com/store/apps/details?id=org.linphone"&gt;Linphone for Android&lt;/a&gt; (or via &lt;a href="https://f-droid.org/en/packages/org.linphone/"&gt;F-Droid&lt;/a&gt;)&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Setting up Linphone should be straightforward. Enter your Sipgate username (a mix of letters and numbers) and password. The server is &lt;code&gt;sipgate.co.uk&lt;/code&gt;. Finally, you &lt;em&gt;must&lt;/em&gt; select &lt;code&gt;UDP&lt;/code&gt; from the transport options.&lt;/p&gt;
+&lt;p&gt;&lt;img decoding="async" loading="lazy" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/Linphone.png" alt="Screenshot of the Linphone settings screen." width="540" height="596" class="aligncenter size-full wp-image-45415" /&gt;&lt;/p&gt;
+&lt;p&gt;And... that's it!&lt;/p&gt;
+&lt;p&gt;You can now call my SIP number from any phone &lt;a href="tel:+441234815259"&gt;+441234815259&lt;/a&gt;. It gets routed to Sipgate, which then notifies the app on my phone, which rings, and I can answer.&lt;/p&gt;
+&lt;p&gt;Sadly, because the native Android dialler doesn't support SIP - it's impossible to choose your SIP account when dialling. So you have to remember to open the Linphone app each time.&lt;/p&gt;
+&lt;h2 id='why-did-google-remove-sip'&gt;&lt;a href='#why-did-google-remove-sip' class='heading-link'&gt;Why did Google remove SIP?&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Because they're evil and they hate open standards which enable interoperability? Nah&lt;sup id="fnref-45413-well"&gt;&lt;a href="#fn-45413-well" class="jetpack-footnote" title="Well, OK, maybe a little bit. "&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Because mobile network operators are terrified of losing even the tiniest sliver of voice revenue? Nah&lt;sup id="fnref2:45413-well"&gt;&lt;a href="#fn-45413-well" class="jetpack-footnote" title="Well, OK, maybe a little bit. "&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;I suspect it was because close to zero people were using it. If you want to make a VoIP call, most people are using WhatsApp, Signal, Telegram, etc. I don't think I've &lt;em&gt;ever&lt;/em&gt; seen someone advertising a SIP address in the wild.&lt;/p&gt;
+&lt;p&gt;It would be lovely if the big apps made even a vague attempt at interoperability. There's no technical reason why &lt;code&gt;user@whatsapp.com&lt;/code&gt; can't place a call to &lt;code&gt;user@telegram.org&lt;/code&gt;.  But they're more interested in a "winner-takes-all" mentality rather than a collaborative effort which uplifts everyone.&lt;/p&gt;
+&lt;p&gt;Oh well.&lt;/p&gt;
+&lt;div class="footnotes"&gt;
+&lt;hr /&gt;
+&lt;ol&gt;
+&lt;li id="fn-45413-well"&gt;
+Well, OK, maybe a &lt;em&gt;little&lt;/em&gt; bit.&amp;#160;&lt;a href="#fnref-45413-well" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt; &lt;a href="#fnref2:45413-well" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/sip-on-android-sipgate-and-linphone/#comments" rel="replies" thr:count="2" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/sip-on-android-sipgate-and-linphone/feed/atom/" rel="replies" thr:count="2" type="application/atom+xml"/>
+<thr:total>2</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">MSc - completed!</title>
+<link href="https://shkspr.mobi/blog/2023/04/msc-completed/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45451</id>
+<updated>2023-04-05T17:05:42Z</updated>
+<published>2023-04-06T11:34:16Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="education"/><category scheme="https://shkspr.mobi/blog" term="MSc"/>
+<summary type="html">Back in November 2020 I started studying for an MSc. And, yesterday, I got this... All done! I've got to say, it has been... an experience. I've relentlessly blogged about the process. The academic content was pretty good, but the administration by QA.com was nothing short of atrocious. Missed deadlines, unhelpful staff, incompetent tutors, and [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/msc-completed/">&lt;p&gt;Back in November 2020 &lt;a href="https://shkspr.mobi/blog/2020/11/new-years-resolution-start-an-msc/"&gt;I started studying for an MSc&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;And, yesterday, I got this...&lt;/p&gt;
+&lt;p&gt;&lt;img decoding="async" loading="lazy" src="https://shkspr.mobi/blog/wp-content/uploads/2023/04/Distinction.png" alt="Screenshot of my graduation notification. I got a distinction!" width="1588" height="732" class="aligncenter size-full wp-image-45558" /&gt;&lt;/p&gt;
+&lt;p&gt;All done!&lt;/p&gt;
+&lt;p&gt;I've got to say, it has been... an experience. I've &lt;a href="https://shkspr.mobi/blog/tag/msc/"&gt;relentlessly blogged about the process&lt;/a&gt;. The academic content was pretty good, but the administration by QA.com was nothing short of atrocious.&lt;/p&gt;
+&lt;p&gt;Missed deadlines, unhelpful staff, incompetent tutors, and admin staff who clearly didn't care about the student experience.&lt;/p&gt;
+&lt;p&gt;Here's an excellent example of the failure of student experience. After arguing (successfully) that they had to stick to their promised timescales for performing my &lt;a href="https://shkspr.mobi/blog/2023/03/questions-asked-at-an-end-point-assessment-professional-discussion/"&gt;End Point Assessment&lt;/a&gt;, I waited to find out if I had passed. I waited. And waited.&lt;/p&gt;
+&lt;p&gt;Then, one morning, I got an email from the university careers service letting me know I was eligible for their graduation services! That's how I found out that I had passed.&lt;/p&gt;
+&lt;p&gt;A few days later, QA sent my my apprenticeship completion certificate. Where they had got the name of my course wrong!&lt;/p&gt;
+&lt;p&gt;Bah!&lt;/p&gt;
+&lt;p&gt;I am &lt;em&gt;so&lt;/em&gt; glad to be done with QA. I'm trying not to be bitter, but it seemed like they went out of their way to make the educational experience as stressful and annoying as possible.&lt;/p&gt;
+&lt;p&gt;But, now I'm done, I'm not going to dwell on them any further.&lt;/p&gt;
+&lt;p&gt;I was aiming to pass the MSc and am chuffed to bits that I got a distinction. I couldn't have managed that without the support of &lt;a href="https://mymisanthropicmusings.org.uk/"&gt;my loving wife&lt;/a&gt;. I'm also grateful to my employers - Cabinet Office. They funded this MSc, and gave me the time and space to study.&lt;/p&gt;
+&lt;p&gt;In the next few weeks, I'll publish my dissertation. It's a thrilling tale of what happens when you stick Civil Servants in the Metaverse and ask them to interact with giant datasets.  Well, I found it interesting!&lt;/p&gt;
+&lt;p&gt;Right, time for a celebratory pint or two.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/msc-completed/#comments" rel="replies" thr:count="13" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/msc-completed/feed/atom/" rel="replies" thr:count="13" type="application/atom+xml"/>
+<thr:total>13</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Help Wanted! Testing Better Markdown Footnotes</title>
+<link href="https://shkspr.mobi/blog/2023/04/testing-better-markdown-footnotes/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=44576</id>
+<updated>2023-04-03T12:34:52Z</updated>
+<published>2023-04-05T11:34:42Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="footnotes"/><category scheme="https://shkspr.mobi/blog" term="markdown"/><category scheme="https://shkspr.mobi/blog" term="php"/><category scheme="https://shkspr.mobi/blog" term="wordpress"/>
+<summary type="html">I've been thinking a lot about footnotes in Markdown. I've contributed a patch to make them slightly better in WordPress. Now I'm wondering how to make them more useful by enhancing their pop-up title text. To that end, I'm writing a patch for PHP Markdown which will display the first ~200 characters of a footnote [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/testing-better-markdown-footnotes/">&lt;p&gt;I've been thinking a lot about &lt;a href="https://shkspr.mobi/blog/tag/footnotes/"&gt;footnotes in Markdown&lt;/a&gt;. I've contributed &lt;a href="https://github.com/Automattic/jetpack/issues/21371"&gt;a patch to make them slightly better in WordPress&lt;/a&gt;.  Now I'm wondering how to make them more useful by enhancing their pop-up title text.&lt;/p&gt;
+&lt;p&gt;To that end, I'm writing a patch for PHP Markdown which will display the first ~200 characters of a footnote in the pop-up title text. Hover over the superscript number and you'll get a preview of the footnote&lt;sup id="fnref-44576-demo"&gt;&lt;a href="#fn-44576-demo" class="jetpack-footnote" title="You should be able to read this text in a pop-up."&gt;1&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Dealing with all sorts of weird HTML &amp;amp; Markdown edge-cases is tricky. So, if you'd like to help, &lt;a href="https://github.com/michelf/php-markdown/issues/387"&gt;please contribute to this discussion&lt;/a&gt;. And if you spot any bugs, please let me know.&lt;/p&gt;
+&lt;h2 id='the-test-begins'&gt;&lt;a href='#the-test-begins' class='heading-link'&gt;The test... Begins!&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;These footnotes support HTML&lt;sup id="fnref-44576-html"&gt;&lt;a href="#fn-44576-html" class="jetpack-footnote" title="Using HTML and nested elements"&gt;2&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;And they cope with Markdown&lt;sup id="fnref-44576-md"&gt;&lt;a href="#fn-44576-md" class="jetpack-footnote" title="Some Markdown emphasis and a link exciting!"&gt;3&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Footnotes with an image&lt;sup id="fnref-44576-img"&gt;&lt;a href="#fn-44576-img" class="jetpack-footnote" title="This is snuggle. Photo of a cute kitten. Everyone wants to be a cat."&gt;4&lt;/a&gt;&lt;/sup&gt; have the &lt;code&gt;img&lt;/code&gt; replaced with its alt text.&lt;/p&gt;
+&lt;p&gt;They don't choke on entities&lt;sup id="fnref-44576-ent"&gt;&lt;a href="#fn-44576-ent" class="jetpack-footnote" title="Entity support &amp;amp; or &amp;amp; &amp;lt; or &amp;lt; £ and £."&gt;5&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;And plain quote marks are fine&lt;sup id="fnref-44576-quote"&gt;&lt;a href="#fn-44576-quote" class="jetpack-footnote" title="&amp;quot;"&gt;6&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Nested elements should work&lt;sup id="fnref-44576-nest"&gt;&lt;a href="#fn-44576-nest" class="jetpack-footnote" title="This is nested in multiple elements"&gt;7&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Very long footnotes are truncated&lt;sup id="fnref-44576-long"&gt;&lt;a href="#fn-44576-long" class="jetpack-footnote" title="Sensors indicate no shuttle or other ships in this sector. According to coordinates, we have travelled 7,000 light years and are located near the system J-25. Tractor beam released, sir. Force field…"&gt;8&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Fully multilingual&lt;sup id="fnref-44576-中国文"&gt;&lt;a href="#fn-44576-中国文" class="jetpack-footnote" title="两位皇子，你们各拥党羽，雄心勃勃地争取国柄和皇座，我们现在代表民众告诉你们：罗马人民已经众口一辞，公举素有忠诚之名的安德洛尼克斯作为统治罗马的君王，因为他曾经为罗马立下许多丰功伟绩，在今日的邦城之内，没有一个比他更高贵的男子，更英勇的战士。他这次奉着元老院的召唤，从征讨野蛮的哥特人的辛苦的战役中回国；凭着他们父子使敌人破胆的声威，已经镇伏了一个强悍善战的民族。自从他为了罗马的光荣开始出征、用武力膺…"&gt;9&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;Also Emoji&lt;sup id="fnref-44576-🥰"&gt;&lt;a href="#fn-44576-🥰" class="jetpack-footnote" title="🥰"&gt;10&lt;/a&gt;&lt;/sup&gt; compatible.&lt;/p&gt;
+&lt;p&gt;Although some may be split if they use ZWJ&lt;sup id="fnref-44576-zwj"&gt;&lt;a href="#fn-44576-zwj" class="jetpack-footnote" title="👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍…"&gt;11&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;h2 id='every-element'&gt;&lt;a href='#every-element' class='heading-link'&gt;Every Element&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;These are the &lt;a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element"&gt;HTML elements&lt;/a&gt; which display textual content - and some notes on where unusual things might happen.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;a&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-a"&gt;&lt;a href="#fn-44576-a" class="jetpack-footnote" title="links This is a link to a website"&gt;12&lt;/a&gt;&lt;/sup&gt; works, but doesn't show the destination of the link.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;abbr&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-abbr"&gt;&lt;a href="#fn-44576-abbr" class="jetpack-footnote" title="What about abbr?"&gt;13&lt;/a&gt;&lt;/sup&gt; The title text doesn't show.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;address&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-address"&gt;&lt;a href="#fn-44576-address" class="jetpack-footnote" title="My email is:
+me@example.com"&gt;14&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;area&amp;gt; / &amp;lt;map&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-area"&gt;&lt;a href="#fn-44576-area" class="jetpack-footnote" title="Click to go Left"&gt;15&lt;/a&gt;&lt;/sup&gt; alt text shows.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;article&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-article"&gt;&lt;a href="#fn-44576-article" class="jetpack-footnote" title="Text inside an article."&gt;16&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;aside&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-aside"&gt;&lt;a href="#fn-44576-aside" class="jetpack-footnote" title="This is an aside"&gt;17&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;audio&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-audio"&gt;&lt;a href="#fn-44576-audio" class="jetpack-footnote" title="Your browser doesn't support audio playback. Download audio."&gt;18&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;b&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-b"&gt;&lt;a href="#fn-44576-b" class="jetpack-footnote" title="This is bold text"&gt;19&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;bdi&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-bdi"&gt;&lt;a href="#fn-44576-bdi" class="jetpack-footnote" title="الرجل القوي إيان: 4th place"&gt;20&lt;/a&gt;&lt;/sup&gt; The BDI algorithm isn't implemented.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;bdo&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-bdo"&gt;&lt;a href="#fn-44576-bdo" class="jetpack-footnote" title="This text will go right to left."&gt;21&lt;/a&gt;&lt;/sup&gt; The override isn't implemented.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;blockquote&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-blockquote"&gt;&lt;a href="#fn-44576-blockquote" class="jetpack-footnote" title="This text is in a blockquote."&gt;22&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;br&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-br"&gt;&lt;a href="#fn-44576-br" class="jetpack-footnote" title="This
+is
+on
+a
+new line. Which is nice
+isn't it?"&gt;23&lt;/a&gt;&lt;/sup&gt; changed to newlines - which works.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;button&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-button"&gt;&lt;a href="#fn-44576-button" class="jetpack-footnote" title="Add to favourites"&gt;24&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;cite&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-cite"&gt;&lt;a href="#fn-44576-cite" class="jetpack-footnote" title="More information can be found in [ISO-0000]"&gt;25&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;code&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-code"&gt;&lt;a href="#fn-44576-code" class="jetpack-footnote" title="The push() method adds one or more elements to the end of an array and returns the new length of the array."&gt;26&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;data&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-data"&gt;&lt;a href="#fn-44576-data" class="jetpack-footnote" title="High Score"&gt;27&lt;/a&gt;&lt;/sup&gt; Doesn't show the value.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;del&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-del"&gt;&lt;a href="#fn-44576-del" class="jetpack-footnote" title="There is nothing"&gt;28&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;details&amp;gt;&amp;lt;summary&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-details"&gt;&lt;a href="#fn-44576-details" class="jetpack-footnote" title="Details Something small enough to escape casual notice."&gt;29&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;dfn&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-dfn"&gt;&lt;a href="#fn-44576-dfn" class="jetpack-footnote" title="The HST is among the most productive scientific instruments ever constructed. It has been in orbit for over 20 years, scanning the sky and returning data and photographs of unprecedented quality and…"&gt;30&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;dialog&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-dialog"&gt;&lt;a href="#fn-44576-dialog" class="jetpack-footnote" title="Greetings, one and all!"&gt;31&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;div&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-div"&gt;&lt;a href="#fn-44576-div" class="jetpack-footnote" title="Everyone loves a div"&gt;32&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;dl&amp;gt;&amp;lt;dt&amp;gt;&amp;lt;dd&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-dl"&gt;&lt;a href="#fn-44576-dl" class="jetpack-footnote" title="Beast of Bodmin A large feline inhabiting Bodmin Moor. Morgawr A sea serpent. Owlman A giant owl-like creature."&gt;33&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;em&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-em"&gt;&lt;a href="#fn-44576-em" class="jetpack-footnote" title="Get out of bed now!"&gt;34&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;fieldset&amp;gt;&amp;lt;legend&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-fieldset"&gt;&lt;a href="#fn-44576-fieldset" class="jetpack-footnote" title="Choose your favorite monster"&gt;35&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;figure&amp;gt;&amp;lt;figcaption&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-figure"&gt;&lt;a href="#fn-44576-figure" class="jetpack-footnote" title="Photo of a kitten. This is my favourite cat."&gt;36&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;footer&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-footer"&gt;&lt;a href="#fn-44576-footer" class="jetpack-footnote" title="I'm not sure this would ever be in a footnote!"&gt;37&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;form&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-form"&gt;&lt;a href="#fn-44576-form" class="jetpack-footnote" title="Enter your name:"&gt;38&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;h1&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-h1"&gt;&lt;a href="#fn-44576-h1" class="jetpack-footnote" title="Do Headers Work?"&gt;39&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;header&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-header"&gt;&lt;a href="#fn-44576-header" class="jetpack-footnote" title="Cute Puppies Express!"&gt;40&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;hgroup&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-hgroup"&gt;&lt;a href="#fn-44576-hgroup" class="jetpack-footnote" title="Frankenstein Or: The Modern Prometheus"&gt;41&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;i&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-i"&gt;&lt;a href="#fn-44576-i" class="jetpack-footnote" title="I thought This can't be real!"&gt;42&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;img&amp;gt;&lt;/code&gt;&lt;sup id="fnref2:44576-img"&gt;&lt;a href="#fn-44576-img" class="jetpack-footnote" title="This is snuggle. Photo of a cute kitten. Everyone wants to be a cat."&gt;4&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;ins&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-ins"&gt;&lt;a href="#fn-44576-ins" class="jetpack-footnote" title="“A wizard is never late…”"&gt;43&lt;/a&gt;&lt;/sup&gt; datetime isn't shown.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;kbd&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-kbd"&gt;&lt;a href="#fn-44576-kbd" class="jetpack-footnote" title="Please press Ctrl + Shift + R to re-render a page."&gt;44&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;label&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-label"&gt;&lt;a href="#fn-44576-label" class="jetpack-footnote" title="Do you like cheese?"&gt;45&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;mark&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-mark"&gt;&lt;a href="#fn-44576-mark" class="jetpack-footnote" title="Several species of salamander inhabit the temperate rainforest of the Pacific Northwest."&gt;46&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;menu&amp;gt;&amp;lt;li&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-menu"&gt;&lt;a href="#fn-44576-menu" class="jetpack-footnote" title="Save for later Share this news"&gt;47&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;meter&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-meter"&gt;&lt;a href="#fn-44576-meter" class="jetpack-footnote" title="at 50/100"&gt;48&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;nav&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-nav"&gt;&lt;a href="#fn-44576-nav" class="jetpack-footnote" title="Links to navigation"&gt;49&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;ol&amp;gt;&amp;lt;li&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-ol"&gt;&lt;a href="#fn-44576-ol" class="jetpack-footnote" title="Buy ingredients Make cake Eat cake"&gt;50&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;optgroup&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-optgroup"&gt;&lt;a href="#fn-44576-optgroup" class="jetpack-footnote" title="Tyrannosaurus Velociraptor Deinonychus Diplodocus Saltasaurus Apatosaurus"&gt;51&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;option&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-option"&gt;&lt;a href="#fn-44576-option" class="jetpack-footnote" title="--Please choose an option-- Dog Cat Hamster Parrot Spider Goldfish"&gt;52&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;output&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-output"&gt;&lt;a href="#fn-44576-output" class="jetpack-footnote" title="This is the output"&gt;53&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;p&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-p"&gt;&lt;a href="#fn-44576-p" class="jetpack-footnote" title="A paragraph of text."&gt;54&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;picture&amp;gt;&amp;lt;source&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-picture"&gt;&lt;a href="#fn-44576-picture" class="jetpack-footnote" title="A cool surfer dude."&gt;55&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;pre&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-pre"&gt;&lt;a href="#fn-44576-pre" class="jetpack-footnote" title="Preformated text"&gt;56&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;progress&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-progress"&gt;&lt;a href="#fn-44576-progress" class="jetpack-footnote" title="70%"&gt;57&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;q&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-q"&gt;&lt;a href="#fn-44576-q" class="jetpack-footnote" title="When Dave asks HAL to open the pod bay door, HAL answers: I'm sorry, Dave. I'm afraid I can't do that.&amp;lt;"&gt;58&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;ruby&amp;gt;&amp;lt;rp&amp;gt;&amp;lt;rt&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-ruby"&gt;&lt;a href="#fn-44576-ruby" class="jetpack-footnote" title="漢 (kan) 字 (ji)"&gt;59&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;s&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-s"&gt;&lt;a href="#fn-44576-s" class="jetpack-footnote" title="This is struck"&gt;60&lt;/a&gt;&lt;/sup&gt; It isn't possible to show a strikethrough in a tooltip.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;samp&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-samp"&gt;&lt;a href="#fn-44576-samp" class="jetpack-footnote" title="Keyboard not found 
+Press F1 to continue"&gt;61&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;section&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-section"&gt;&lt;a href="#fn-44576-section" class="jetpack-footnote" title="This is a section."&gt;62&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;select&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-select"&gt;&lt;a href="#fn-44576-select" class="jetpack-footnote" title="--Please choose an option-- Dog Cat Hamster Parrot Spider Goldfish"&gt;63&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;small&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-small"&gt;&lt;a href="#fn-44576-small" class="jetpack-footnote" title="Some very small text."&gt;64&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;span&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-span"&gt;&lt;a href="#fn-44576-span" class="jetpack-footnote" title="This text is spanned"&gt;65&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;strong&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-strong"&gt;&lt;a href="#fn-44576-strong" class="jetpack-footnote" title="This is super strong"&gt;66&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;sub&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-sub"&gt;&lt;a href="#fn-44576-sub" class="jetpack-footnote" title="H20"&gt;67&lt;/a&gt;&lt;/sup&gt; Subscript formatting isn't available in title text&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;sup&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-sup"&gt;&lt;a href="#fn-44576-sup" class="jetpack-footnote" title="E=mc2"&gt;68&lt;/a&gt;&lt;/sup&gt; Neither is superscript&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;table&amp;gt;&amp;lt;thead&amp;gt;&amp;lt;tr&amp;gt;&amp;lt;th&amp;gt;&amp;lt;tbody&amp;gt;&amp;lt;td&amp;gt;&amp;lt;tfoot&amp;gt;&amp;lt;caption&amp;gt;&amp;lt;colgroup&amp;gt;&amp;lt;col&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-table"&gt;&lt;a href="#fn-44576-table" class="jetpack-footnote" title="The table header The table body with two columns Footer A demo table"&gt;69&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;textarea&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-textarea"&gt;&lt;a href="#fn-44576-textarea" class="jetpack-footnote" title="It was a dark and stormy night..."&gt;70&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;time&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-time"&gt;&lt;a href="#fn-44576-time" class="jetpack-footnote" title="The concert starts at 20:00"&gt;71&lt;/a&gt;&lt;/sup&gt; datetime isn't displayed&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;u&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-u"&gt;&lt;a href="#fn-44576-u" class="jetpack-footnote" title="You could use this element to highlight speling mistakes"&gt;72&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;ul&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-ul"&gt;&lt;a href="#fn-44576-ul" class="jetpack-footnote" title="CatsDogsSheep"&gt;73&lt;/a&gt;&lt;/sup&gt; If there is no space between the elements, the tooltip may look odd. Here, the HTML is &lt;code&gt;&amp;lt;ul&amp;gt;&amp;lt;li&amp;gt;Cats&amp;lt;/li&amp;gt;&amp;lt;li&amp;gt;Dogs&amp;lt;/li&amp;gt;&amp;lt;li&amp;gt;Sheep&amp;lt;/li&amp;gt;&amp;lt;/ul&amp;gt;&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;var&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-var"&gt;&lt;a href="#fn-44576-var" class="jetpack-footnote" title="The volume of a box is l × w × h, where l represents the length, w the width and h the height of the box."&gt;74&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;video&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-video"&gt;&lt;a href="#fn-44576-video" class="jetpack-footnote" title="Download the WEBM or MP4 video."&gt;75&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;&amp;lt;wbr&amp;gt;&lt;/code&gt;&lt;sup id="fnref-44576-wbr"&gt;&lt;a href="#fn-44576-wbr" class="jetpack-footnote" title="Fernstraßenbauprivatfinanzierungsgesetz"&gt;76&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id='get-involved'&gt;&lt;a href='#get-involved' class='heading-link'&gt;Get involved&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;If you'd like to peruse my code or offer a suggestion, &lt;a href="https://github.com/michelf/php-markdown/issues/387"&gt;take a look at this GitHub issue&lt;/a&gt;.&lt;/p&gt;
+&lt;div class="footnotes"&gt;
+&lt;hr /&gt;
+&lt;ol&gt;
+&lt;li id="fn-44576-demo"&gt;
+You should be able to read this text in a pop-up.&amp;#160;&lt;a href="#fnref-44576-demo" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-html"&gt;
+&lt;a href="https://example.com/"&gt;Using &lt;em&gt;HTML&lt;/em&gt; and &lt;strong&gt;nested &lt;em&gt;elements&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt;&amp;#160;&lt;a href="#fnref-44576-html" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-md"&gt;
+Some Markdown &lt;em&gt;emphasis&lt;/em&gt; and a &lt;a href="https://example.com"&gt;link&lt;/a&gt; &lt;strong&gt;exciting!&lt;/strong&gt;&amp;#160;&lt;a href="#fnref-44576-md" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-img"&gt;
+This is snuggle. &lt;img decoding="async" src="https://placekitten.com/100/100" alt="Photo of a cute kitten." /&gt; Everyone wants to be a cat.&amp;#160;&lt;a href="#fnref-44576-img" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt; &lt;a href="#fnref2:44576-img" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-ent"&gt;
+Entity support &amp;amp; or &amp;amp; &amp;lt; or &amp;lt; &amp;#x00A3; and £.&amp;#160;&lt;a href="#fnref-44576-ent" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-quote"&gt;
+"&amp;#160;&lt;a href="#fnref-44576-quote" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-nest"&gt;
+&lt;span&gt;This &lt;strong&gt;is nested in &lt;em&gt;multiple&lt;/em&gt; elements&lt;/strong&gt;&lt;/span&gt;&amp;#160;&lt;a href="#fnref-44576-nest" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-long"&gt;
+Sensors indicate no shuttle or other ships in this sector. According to coordinates, we have travelled 7,000 light years and are located near the system J-25. Tractor beam released, sir. Force field maintaining our hull integrity. Damage report? Sections 27, 28 and 29 on decks four, five and six destroyed. Without our shields, at this range it is probable a photon detonation could destroy the Enterprise.&amp;#160;&lt;a href="#fnref-44576-long" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-中国文"&gt;
+两位皇子，你们各拥党羽，雄心勃勃地争取国柄和皇座，我们现在代表民众告诉你们：罗马人民已经众口一辞，公举素有忠诚之名的安德洛尼克斯作为统治罗马的君王，因为他曾经为罗马立下许多丰功伟绩，在今日的邦城之内，没有一个比他更高贵的男子，更英勇的战士。他这次奉着元老院的召唤，从征讨野蛮的哥特人的辛苦的战役中回国；凭着他们父子使敌人破胆的声威，已经镇伏了一个强悍善战的民族。自从他为了罗马的光荣开始出征、用武力膺惩我们敌人的骄傲以来，已经费了十年的时间；他曾经五次流着血护送他的战死疆场的英勇的儿子们的灵榇回到罗马来；现在这位善良的安德洛尼克斯，雄名远播的泰特斯，终于满载着光荣的战利品，旌旗招展，奏凯班师了。凭着你们所希望克绳遗武的先皇陛下的名义，凭着你们在表面上尊崇的议会的权力，让我们请求你们各自退下，解散你们的随从，用和平而谦卑的态度，根据你们本身的才德，提出你们合法的要求。&amp;#160;&lt;a href="#fnref-44576-中国文" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-🥰"&gt;
+🥰&amp;#160;&lt;a href="#fnref-44576-🥰" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-zwj"&gt;
+👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲👨‍🦲&amp;#160;&lt;a href="#fnref-44576-zwj" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-a"&gt;
+links &lt;a href="https://example.com/"&gt;This is a link to a website&lt;/a&gt;&amp;#160;&lt;a href="#fnref-44576-a" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-abbr"&gt;
+What about &lt;abbr title="Abbreviation"&gt;abbr&lt;/abbr&gt;?&amp;#160;&lt;a href="#fnref-44576-abbr" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-address"&gt;
+&lt;address&gt;My email is:&lt;br /&gt;&lt;a href="mailto:me@example.com"&gt;me@example.com&lt;/a&gt;&lt;/address&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-address" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-area"&gt;
+&lt;map name="test"&gt;
+&lt;area
+shape="circle"
+coords="75,75,75"
+href="left.html"
+alt="Click to go Left" /&gt;&lt;/map&gt;
+&lt;p&gt;&amp;#160;&lt;a href="#fnref-44576-area" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-article"&gt;
+&lt;article&gt;Text inside an article.&lt;/article&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-article" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-aside"&gt;
+&lt;aside&gt;This is an aside&lt;/aside&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-aside" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-audio"&gt;
+&lt;audio controls src="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3"&gt;Your browser doesn't support audio playback. &lt;a href="https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3"&gt;Download audio&lt;/a&gt;.&lt;/audio&gt;&amp;#160;&lt;a href="#fnref-44576-audio" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-b"&gt;
+This is &lt;b&gt;bold text&lt;/b&gt;&amp;#160;&lt;a href="#fnref-44576-b" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-bdi"&gt;
+&lt;bdi class="name"&gt;الرجل القوي إيان&lt;/bdi&gt;: 4th place&amp;#160;&lt;a href="#fnref-44576-bdi" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-bdo"&gt;
+&lt;bdo dir="rtl"&gt;This text will go right to left.&lt;/bdo&gt;&amp;#160;&lt;a href="#fnref-44576-bdo" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-blockquote"&gt;
+&lt;blockquote&gt;&lt;p&gt;This text is in a blockquote.&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-blockquote" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-br"&gt;
+This&lt;br /&gt;is&lt;br /&gt;on&lt;br /&gt;a&lt;br /&gt;new line. Which is nice&lt;br /&gt;isn't it?&amp;#160;&lt;a href="#fnref-44576-br" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-button"&gt;
+&lt;button type="button"&gt;Add to favourites&lt;/button&gt;&amp;#160;&lt;a href="#fnref-44576-button" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-cite"&gt;
+More information can be found in &lt;cite&gt;[ISO-0000]&lt;/cite&gt;&amp;#160;&lt;a href="#fnref-44576-cite" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-code"&gt;
+The &lt;code&gt;push()&lt;/code&gt; method adds one or more elements to the end of an array and returns the new length of the array.&amp;#160;&lt;a href="#fnref-44576-code" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-data"&gt;
+&lt;data value="12345"&gt;High Score&lt;/data&gt;&amp;#160;&lt;a href="#fnref-44576-data" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-del"&gt;
+There is &lt;del&gt;nothing&lt;/del&gt;&amp;#160;&lt;a href="#fnref-44576-del" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-details"&gt;
+&lt;details&gt;
+&lt;summary&gt;Details&lt;/summary&gt;
+&lt;p&gt;Something small enough to escape casual notice.&lt;br /&gt;
+&lt;/details&gt;
+&lt;p&gt;&amp;#160;&lt;a href="#fnref-44576-details" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-dfn"&gt;
+The &lt;dfn&gt;&lt;abbr title="Hubble Space Telescope"&gt;HST&lt;/abbr&gt;&lt;/dfn&gt; is among the most productive scientific instruments ever constructed. It has been in orbit for over 20 years, scanning the sky and returning data and photographs of unprecedented quality and detail.&amp;#160;&lt;a href="#fnref-44576-dfn" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-dialog"&gt;
+&lt;dialog open&gt;Greetings, one and all!&lt;/dialog&gt;&amp;#160;&lt;a href="#fnref-44576-dialog" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-div"&gt;
+&lt;div&gt;Everyone loves a div&lt;/div&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-div" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-dl"&gt;
+&lt;dl&gt;
+&lt;dt&gt;Beast of Bodmin&lt;/dt&gt;
+&lt;dd&gt;A large feline inhabiting Bodmin Moor.&lt;/dd&gt;
+&lt;dt&gt;Morgawr&lt;/dt&gt;
+&lt;dd&gt;A sea serpent.&lt;/dd&gt;
+&lt;dt&gt;Owlman&lt;/dt&gt;
+&lt;dd&gt;A giant owl-like creature.&lt;/dd&gt;
+&lt;/dl&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-dl" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-em"&gt;
+Get out of bed &lt;em&gt;now&lt;/em&gt;!&amp;#160;&lt;a href="#fnref-44576-em" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-fieldset"&gt;
+&lt;fieldset&gt;
+&lt;legend&gt;Choose your favorite monster&lt;/legend&gt;
+&lt;/fieldset&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-fieldset" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-figure"&gt;
+&lt;figure&gt;
+&lt;img decoding="async" src="https://placekitten.com/200" alt="Photo of a kitten."&gt;&lt;figcaption&gt;This is my favourite cat.&lt;/figcaption&gt;&lt;/figure&gt;
+&lt;p&gt;&amp;#160;&lt;a href="#fnref-44576-figure" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-footer"&gt;
+&lt;footer&gt;I'm not sure this would ever be in a footnote!&lt;/footer&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-footer" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-form"&gt;
+&lt;form action=""&gt;&lt;label for="name"&gt;Enter your name: &lt;/label&gt;&lt;input type="text" name="name" id="name" required&gt;&lt;input type="submit" value="Subscribe!"&gt;&lt;/form&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-form" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-h1"&gt;
+&lt;h1 id='do-headers-work'&gt;&lt;a href='#do-headers-work' class='heading-link'&gt;Do Headers Work?&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-h1" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-header"&gt;
+&lt;header&gt;Cute Puppies Express!&lt;/header&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-header" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-hgroup"&gt;
+&lt;hgroup&gt;
+&lt;h1 id='frankenstein'&gt;&lt;a href='#frankenstein' class='heading-link'&gt;Frankenstein&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;    Or: The Modern Prometheus&lt;br /&gt;
+&lt;/hgroup&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-hgroup" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-i"&gt;
+I thought &lt;i&gt;This can't be real!&lt;/i&gt;&amp;#160;&lt;a href="#fnref-44576-i" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-ins"&gt;
+&lt;ins datetime="2018-05"&gt;“A wizard is never late…”&lt;/ins&gt;&amp;#160;&lt;a href="#fnref-44576-ins" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-kbd"&gt;
+Please press &lt;kbd&gt;Ctrl&lt;/kbd&gt; + &lt;kbd&gt;Shift&lt;/kbd&gt; + &lt;kbd&gt;R&lt;/kbd&gt; to re-render a page.&amp;#160;&lt;a href="#fnref-44576-kbd" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-label"&gt;
+&lt;label for="cheese"&gt;Do you like cheese?&lt;/label&gt;&lt;input type="checkbox" name="cheese" id="cheese"&gt;&amp;#160;&lt;a href="#fnref-44576-label" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-mark"&gt;
+Several species of &lt;mark&gt;salamander&lt;/mark&gt; inhabit the temperate rainforest of the Pacific Northwest.&amp;#160;&lt;a href="#fnref-44576-mark" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-menu"&gt;
+&lt;menu&gt;
+&lt;li&gt;&lt;button id="save"&gt;Save for later&lt;/button&gt;&lt;/li&gt;
+&lt;li&gt;&lt;button id="share"&gt;Share this news&lt;/button&gt;&lt;/li&gt;
+&lt;/menu&gt;
+&lt;p&gt;&amp;#160;&lt;a href="#fnref-44576-menu" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-meter"&gt;
+&lt;meter id="fuel"
+   min="0" max="100"
+   low="33" high="66" optimum="80"
+   value="50"&gt;at 50/100&lt;/meter&gt;&amp;#160;&lt;a href="#fnref-44576-meter" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-nav"&gt;
+&lt;nav&gt;Links to navigation&lt;/nav&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-nav" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-ol"&gt;
+&lt;ol&gt;
+&lt;li&gt;Buy ingredients&lt;/li&gt;
+&lt;li&gt;Make cake&lt;/li&gt;
+&lt;li&gt;Eat cake&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-ol" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-optgroup"&gt;
+&lt;select id="dino-select"&gt;&lt;br /&gt;
+&lt;optgroup label="Theropods"&gt;&lt;option&gt;Tyrannosaurus&lt;/option&gt;&lt;option&gt;Velociraptor&lt;/option&gt;&lt;option&gt;Deinonychus&lt;/option&gt;&lt;/optgroup&gt;&lt;br /&gt;
+&lt;optgroup label="Sauropods"&gt;&lt;option&gt;Diplodocus&lt;/option&gt;&lt;option&gt;Saltasaurus&lt;/option&gt;&lt;option&gt;Apatosaurus&lt;/option&gt;&lt;/optgroup&gt;&lt;br /&gt;
+&lt;/select&gt;&amp;#160;&lt;a href="#fnref-44576-optgroup" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-option"&gt;
+&lt;select id="pet-select"&gt;&lt;option value=""&gt;--Please choose an option--&lt;/option&gt;&lt;option value="dog"&gt;Dog&lt;/option&gt;&lt;option value="cat"&gt;Cat&lt;/option&gt;&lt;option value="hamster"&gt;Hamster&lt;/option&gt;&lt;option value="parrot"&gt;Parrot&lt;/option&gt;&lt;option value="spider"&gt;Spider&lt;/option&gt;&lt;option value="goldfish"&gt;Goldfish&lt;/option&gt;&lt;/select&gt;&amp;#160;&lt;a href="#fnref-44576-option" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-output"&gt;
+&lt;output name="result" for="a b"&gt;This is the output&lt;/output&gt;&amp;#160;&lt;a href="#fnref-44576-output" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-p"&gt;
+A paragraph of text.&amp;#160;&lt;a href="#fnref-44576-p" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-picture"&gt;
+&lt;picture&gt;&lt;source srcset="https://interactive-examples.mdn.mozilla.net/media/cc0-images/surfer-240-200.jpg" media="(orientation: portrait)"&gt;&lt;img decoding="async" src="https://interactive-examples.mdn.mozilla.net/media/cc0-images/painted-hand-298-332.jpg" alt="A cool surfer dude."&gt;
+&lt;/picture&gt;&amp;#160;&lt;a href="#fnref-44576-picture" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-pre"&gt;
+&lt;pre&gt;Preformated text&lt;/pre&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-pre" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-progress"&gt;
+&lt;progress id="file" max="100" value="70"&gt;70%&lt;/progress&gt;&amp;#160;&lt;a href="#fnref-44576-progress" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-q"&gt;
+When Dave asks HAL to open the pod bay door, HAL answers: &lt;q cite="https://www.imdb.com/title/tt0062622/quotes/qt0396921"&gt;I'm sorry, Dave. I'm afraid I can't do that.&lt;/q&gt;&amp;lt;&amp;#160;&lt;a href="#fnref-44576-q" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-ruby"&gt;
+&lt;ruby&gt;&lt;br /&gt;
+漢 &lt;rp&gt;(&lt;/rp&gt;&lt;rt&gt;kan&lt;/rt&gt;&lt;rp&gt;)&lt;/rp&gt;&lt;br /&gt;
+字 &lt;rp&gt;(&lt;/rp&gt;&lt;rt&gt;ji&lt;/rt&gt;&lt;rp&gt;)&lt;/rp&gt;&lt;br /&gt;
+&lt;/ruby&gt;&amp;#160;&lt;a href="#fnref-44576-ruby" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-s"&gt;
+This is &lt;s&gt;struck&lt;/s&gt;&amp;#160;&lt;a href="#fnref-44576-s" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-samp"&gt;
+&lt;samp&gt;Keyboard not found &lt;br /&gt;Press F1 to continue&lt;/samp&gt;&amp;#160;&lt;a href="#fnref-44576-samp" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-section"&gt;
+&lt;section&gt;This is a section.&lt;/section&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-section" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-select"&gt;
+&lt;select name="pets" id="pet-select"&gt;&lt;option value=""&gt;--Please choose an option--&lt;/option&gt;&lt;option value="dog"&gt;Dog&lt;/option&gt;&lt;option value="cat"&gt;Cat&lt;/option&gt;&lt;option value="hamster"&gt;Hamster&lt;/option&gt;&lt;option value="parrot"&gt;Parrot&lt;/option&gt;&lt;option value="spider"&gt;Spider&lt;/option&gt;&lt;option value="goldfish"&gt;Goldfish&lt;/option&gt;&lt;/select&gt;&amp;#160;&lt;a href="#fnref-44576-select" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-small"&gt;
+Some &lt;small&gt;very small&lt;/small&gt; text.&amp;#160;&lt;a href="#fnref-44576-small" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-span"&gt;
+This text is &lt;span&gt;spanned&lt;/span&gt;&amp;#160;&lt;a href="#fnref-44576-span" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-strong"&gt;
+This &lt;strong&gt;is super strong&lt;/strong&gt;&amp;#160;&lt;a href="#fnref-44576-strong" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-sub"&gt;
+H&lt;sub&gt;2&lt;/sub&gt;0&amp;#160;&lt;a href="#fnref-44576-sub" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-sup"&gt;
+E=mc&lt;sup&gt;2&lt;/sup&gt;&amp;#160;&lt;a href="#fnref-44576-sup" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-table"&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th colspan="2"&gt;The table header&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;colgroup&gt;
+&lt;col&gt;
+&lt;col span="2" class="batman"&gt;
+&lt;col span="2" class="flash"&gt;
+    &lt;/colgroup&gt;
+&lt;tr&gt;
+&lt;td&gt;The table body&lt;/td&gt;
+&lt;td&gt;with two columns&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;tfoot&gt;
+&lt;tr&gt;
+&lt;td&gt;Footer&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tfoot&gt;
+&lt;caption&gt;A demo table&lt;/caption&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-table" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-textarea"&gt;
+&lt;textarea&gt;It was a dark and stormy night...&lt;/textarea&gt;&amp;#160;&lt;a href="#fnref-44576-textarea" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-time"&gt;
+The concert starts at &lt;time datetime="20:00"&gt;20:00&lt;/time&gt;&amp;#160;&lt;a href="#fnref-44576-time" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-u"&gt;
+You could use this element to highlight &lt;u&gt;speling&lt;/u&gt; mistakes&amp;#160;&lt;a href="#fnref-44576-u" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-ul"&gt;
+&lt;ul&gt;
+&lt;li&gt;Cats&lt;/li&gt;
+&lt;li&gt;Dogs&lt;/li&gt;
+&lt;li&gt;Sheep&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;a href="#fnref-44576-ul" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-var"&gt;
+The volume of a box is &lt;var&gt;l&lt;/var&gt; × &lt;var&gt;w&lt;/var&gt; × &lt;var&gt;h&lt;/var&gt;, where &lt;var&gt;l&lt;/var&gt; represents the length, &lt;var&gt;w&lt;/var&gt; the width and &lt;var&gt;h&lt;/var&gt; the height of the box.&amp;#160;&lt;a href="#fnref-44576-var" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-video"&gt;
+&lt;video controls width="250"&gt;&lt;source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm" type="video/webm"&gt;&lt;source src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4" type="video/mp4"&gt;Download the &lt;a href="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm"&gt;WEBM&lt;/a&gt; or &lt;a href="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"&gt;MP4&lt;/a&gt; video.&lt;/video&gt;&amp;#160;&lt;a href="#fnref-44576-video" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-44576-wbr"&gt;
+Fernstraßen&lt;wbr&gt;bau&lt;wbr&gt;privat&lt;wbr&gt;finanzierungs&lt;wbr&gt;gesetz&amp;#160;&lt;a href="#fnref-44576-wbr" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/testing-better-markdown-footnotes/#comments" rel="replies" thr:count="4" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/testing-better-markdown-footnotes/feed/atom/" rel="replies" thr:count="4" type="application/atom+xml"/>
+<thr:total>4</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Some thoughts on &amp;quot;Hacking the Cis-tem&amp;quot;</title>
+<link href="https://shkspr.mobi/blog/2023/04/some-thoughts-on-hacking-the-cis-tem/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45240</id>
+<updated>2023-03-21T09:16:05Z</updated>
+<published>2023-04-04T11:34:49Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Computer Science"/><category scheme="https://shkspr.mobi/blog" term="database"/><category scheme="https://shkspr.mobi/blog" term="gender"/><category scheme="https://shkspr.mobi/blog" term="trans"/>
+<summary type="html">I recently read a wonderful paper by Mar Hicks called "Hacking the Cis-tem" which is about database design in the 1960s and the nascent digital state's approach to transgender individuals. It's a short and readable paper with some jaw-dropping anecdotes. Like the man who immediately got a pay rise after his transition, despite working in [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/some-thoughts-on-hacking-the-cis-tem/">&lt;p&gt;I recently read a wonderful paper by &lt;a href="https://marhicks.com/profile.html"&gt;Mar Hicks&lt;/a&gt; called "Hacking the Cis-tem" which is about database design in the 1960s and the nascent digital state's approach to transgender individuals.&lt;/p&gt;
+&lt;p&gt;It's a short and readable paper with some jaw-dropping anecdotes. Like the man who immediately got a pay rise after his transition, despite working in exactly the same job as before; women were on a lower pay scale...&lt;/p&gt;
+&lt;p&gt;At a basic level you can see why, when computer memory was measured in tens of kilobytes, it made sense to say &lt;code&gt;male==0&lt;/code&gt; and &lt;code&gt;female==1&lt;/code&gt;. Why waste precious bits on something which could only ever be binary? Why create an option to change a data field which is immutable? Why design a schema which would allow a woman to be married to another woman?&lt;/p&gt;
+&lt;p&gt;And yet, even with those constraints, people were able to change their "official" gender within the database. Oh, sure, there were all sorts of cludges (both technical and political) - but it &lt;em&gt;was&lt;/em&gt; possible.&lt;/p&gt;
+&lt;p&gt;The paper sparked four main thoughts for me.&lt;/p&gt;
+&lt;h2 id='theres-no-such-thing-as-immutable'&gt;&lt;a href='#theres-no-such-thing-as-immutable' class='heading-link'&gt;There's No Such Thing As Immutable&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;For all the talk of Blockchain solving the world's issues (🤣) sometimes it is necessary to "rewrite history". People make mistakes. Assumptions change. Knowledge improves. Lots of facts, it turns out, are matters of perspective.&lt;/p&gt;
+&lt;p&gt;A really good example of this is time.  I don't mean pesky things like timezones and leap seconds. I mean that, due to general relativity, &lt;a href="https://www.bbc.co.uk/newsround/64801599"&gt;one second on the moon is not equal to one second on Earth&lt;/a&gt;.  How does your time-ordered database cope with that?&lt;/p&gt;
+&lt;p&gt;You might very well live in a culture where divorce is impossible, or where &lt;a href="https://www.gov.uk/government/publications/criminal-law-rape-within-marriage"&gt;sexual consent cannot ever be revoked&lt;/a&gt;, or where a person can only be married to one other person at a time. But these are all societal conventions which are liable - and indeed likely - to change.&lt;/p&gt;
+&lt;p&gt;I'm &lt;em&gt;almost&lt;/em&gt; tempted to say that the &lt;code&gt;boolean&lt;/code&gt; type shouldn't exist in modern databases!&lt;/p&gt;
+&lt;h2 id='diverse-teams-build-better-products'&gt;&lt;a href='#diverse-teams-build-better-products' class='heading-link'&gt;Diverse Teams Build Better Products&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;I don't know how many computer programmers in the 1960s were part of the LGBTQ+ community. And I don't know how accepting their colleagues would have been of them.&lt;/p&gt;
+&lt;p&gt;Perhaps you have read and memorised every single one of the &lt;a href="https://github.com/kdeldycke/awesome-falsehood"&gt;Falsehoods Programmers Believe About...&lt;/a&gt; lessons. But surely it is more efficient to build a team who are empowered enough to confidently correct their colleagues' incorrect assumptions about how the world is arranged?&lt;/p&gt;
+&lt;p&gt;We bake rigid assumptions into our designs not out of malign intent (usually) but because we're ignorant.  That's only shameful if we refuse to listen to other people's experiences.&lt;/p&gt;
+&lt;h2 id='computers-serve-humans-not-the-other-way-around'&gt;&lt;a href='#computers-serve-humans-not-the-other-way-around' class='heading-link'&gt;Computers Serve Humans - not the other way around&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;Most of us have been forced to lie to a computer at one time or another. Perhaps it is a system which insists that you &lt;em&gt;must&lt;/em&gt; have a US-style ZIP code. Or that your name &lt;em&gt;must&lt;/em&gt; be longer that three characters. Or that you don't have an apostrophe in your email address. Or that your wife is Mrs, not Ms.&lt;/p&gt;
+&lt;p&gt;I know for sure that you've filled in a paper form where the boxes were too small and you've had to decide how to truncate your data.&lt;/p&gt;
+&lt;p&gt;Why? Because people have designed a schema which doesn't account for the variety in the world.&lt;/p&gt;
+&lt;h2 id='todays-constraints-arent-tomorrows'&gt;&lt;a href='#todays-constraints-arent-tomorrows' class='heading-link'&gt;Today's constraints aren't tomorrow's&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;As I said at the start, it's understandable that designers designed around the constraints they faced. But these days, we have an awareness of the likely progress of technology.&lt;/p&gt;
+&lt;p&gt;It's said that the Apollo Moon landings were only possible because the designers &lt;a href="https://archive.canadianbusiness.com/blogs-and-comment/stop-using-gretzky-where-the-puck-is-quote/"&gt;skated to where the puck was &lt;em&gt;going&lt;/em&gt; to be&lt;/a&gt;. They made reasonable assumptions about what technology was going to be developed in the future.&lt;/p&gt;
+&lt;p&gt;Yes, we should try and build things which perform well on existing and historic hardware. But we can't ignore the fact that tomorrow's computers will be smaller, faster, cheaper, and more efficient.&lt;/p&gt;
+&lt;p&gt;Does it make sense to store a human's name as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-sql"&gt;CREATE TABLE people (
+  name VARCHAR(32) CHARACTER SET latin1
+);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Probably not. Disk space is cheap and getting cheaper. Perhaps people of the future will have names consisting of 500 emoji? Or perhaps people with "exotic" Unicode characters will want to use our services.&lt;/p&gt;
+&lt;p&gt;Oh, I'm sure there will be a performance hit if every column is essentially unlimited. But that's an argument to design better database engines - not to limit human expression.&lt;/p&gt;
+&lt;h2 id='read-more'&gt;&lt;a href='#read-more' class='heading-link'&gt;Read More&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;You can &lt;a href="https://doi.org/10.1109/MAHC.2019.2897667"&gt;read "Hacking the Cis-tem" in the IEEE&lt;/a&gt; or, if that's not available to you, &lt;a href="https://marhicks.com/writing/hicks-hackingthecistempreprint.pdf"&gt;read the pre-print&lt;/a&gt;.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/some-thoughts-on-hacking-the-cis-tem/#comments" rel="replies" thr:count="5" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/some-thoughts-on-hacking-the-cis-tem/feed/atom/" rel="replies" thr:count="5" type="application/atom+xml"/>
+<thr:total>5</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: Conspiracy: A History of Boll*cks Theories, and How Not to Fall for Them - Tom Phillips &amp;#038; Jonn Elledge</title>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-conspiracy-a-history-of-bollcks-theories-and-how-not-to-fall-for-them-tom-phillips-jonn-elledge/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45232</id>
+<updated>2023-04-03T06:52:10Z</updated>
+<published>2023-04-03T11:34:38Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/>
+<summary type="html">Much like Tom Phillips' last book this is a fun and well-written look at a peculiar facet of humanity. How conspiracy theories work, and why so many people are attracted to them. The book is very now - and I do wonder how it will date. But there's something invigorating about reading a book which [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/book-review-conspiracy-a-history-of-bollcks-theories-and-how-not-to-fall-for-them-tom-phillips-jonn-elledge/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/conspiracy.jpg" alt="Book cover showing a UFO beaming up a cow." width="200" class="alignleft size-full wp-image-45233" /&gt;Much like &lt;a href="https://shkspr.mobi/blog/2018/08/week-notes-5/#non-fiction"&gt;Tom Phillips' last book&lt;/a&gt; this is a fun and well-written look at a peculiar facet of humanity. How conspiracy theories work, and why so many people are attracted to them.&lt;/p&gt;
+&lt;p&gt;The book is &lt;em&gt;very&lt;/em&gt; now - and I do wonder how it will date. But there's something invigorating about reading a book which tracks the route of a two-hundred year old hoax to the present day.  It accurately describes just how &lt;em&gt;fun&lt;/em&gt; it is to "research" a conspiracy theory. There's a ready made community of people who will leave you easily followed "clues" and shower you with praise for any discoveries you make. You get to feel like a proper investigator with deep insider knowledge. And where's the harm in that?&lt;/p&gt;
+&lt;p&gt;Ah.&lt;/p&gt;
+&lt;p&gt;It is depressing just how much history rhymes and repeats. Take this section about a former US President:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  Moreover, he claimed Lincoln himself had told him as much prior to his death – revealing that the true battle the president was fighting was not against the Confederacy, but against the Pope, and claiming that every one of the murderous plots against him was the work of the Jesuits.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;Remind you of anyone?&lt;sup id="fnref-45232-hist"&gt;&lt;a href="#fn-45232-hist" class="jetpack-footnote" title="That's probably because history as we know it is a lie."&gt;1&lt;/a&gt;&lt;/sup&gt;&lt;/p&gt;
+&lt;p&gt;Written under the shadow of COVID-19&lt;sup id="fnref-45232-shadow"&gt;&lt;a href="#fn-45232-shadow" class="jetpack-footnote" title="And the shadowy forces which control it."&gt;2&lt;/a&gt;&lt;/sup&gt;, it spends a good deal of time talking about the various conspiracy theories relating to medicine and pandemics.&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  One correspondent in the Lancet wrote in 1831 that cholera was merely a ‘government hoax, got up for the purpose of … distracting the attention of the people away from the reform bill’ – adding that they feared this trick had been pulled by the government before, with the assistance of ‘the faculty’ and the ‘Liespapers’.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;Fuck. We haven't leaned anything, have we?&lt;/p&gt;
+&lt;p&gt;The problem is, we live in an age of complexity. It would be lovely if everything was controlled by a small group of elites - but the reality, that no one is in control, is utterly terrifying&lt;sup id="fnref-45232-me"&gt;&lt;a href="#fn-45232-me" class="jetpack-footnote" title="Of course, I am not terrified because I'm part of the secret society of Lizard Men."&gt;3&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;The book is peppered with footnotes containing silly asides - fair warning, it's pretty easy to miss a few of them&lt;span style="display:none;"&gt;&lt;sup id="fnref-45232-like"&gt;&lt;a href="#fn-45232-like" class="jetpack-footnote" title="Like this one."&gt;4&lt;/a&gt;&lt;/sup&gt;&lt;/span&gt;&lt;sup id="fnref-45232-see"&gt;&lt;a href="#fn-45232-see" class="jetpack-footnote" title="See?!"&gt;5&lt;/a&gt;&lt;/sup&gt;.&lt;/p&gt;
+&lt;p&gt;In the end, I was left wondering what nonsense-thinking I'm susceptible to? I've met people from Palantir and, while I don't like their tech, they didn't seem to be evil geniuses. Perhaps the alcohol industry really is stopping recreational drug reform, or maybe some overlords don't want us achieving chemical enlightenment? But these things don't require secret societies and cabals with mysterious initiation rites&lt;sup id="fnref-45232-rite"&gt;&lt;a href="#fn-45232-rite" class="jetpack-footnote" title="Where would you even find a virgin these days?"&gt;6&lt;/a&gt;&lt;/sup&gt;. It just requires misaligned incentives and complex ecosystems.&lt;/p&gt;
+&lt;p&gt;It is a gleefully fun and funny book - but it left me a little depressed about the state of the human condition.&lt;/p&gt;
+&lt;div class="footnotes"&gt;
+&lt;hr /&gt;
+&lt;ol&gt;
+&lt;li id="fn-45232-hist"&gt;
+That's probably because history as we know it is a lie.&amp;#160;&lt;a href="#fnref-45232-hist" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-45232-shadow"&gt;
+And the shadowy forces which control it.&amp;#160;&lt;a href="#fnref-45232-shadow" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-45232-me"&gt;
+Of course, I am not terrified because I'm part of the secret society of Lizard Men.&amp;#160;&lt;a href="#fnref-45232-me" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-45232-like"&gt;
+Like this one.&amp;#160;&lt;a href="#fnref-45232-like" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-45232-see"&gt;
+See?!&amp;#160;&lt;a href="#fnref-45232-see" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;li id="fn-45232-rite"&gt;
+Where would you even &lt;em&gt;find&lt;/em&gt; a virgin these days?&amp;#160;&lt;a href="#fnref-45232-rite" title="Return to main content."&gt;&amp;#8617;&lt;/a&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-conspiracy-a-history-of-bollcks-theories-and-how-not-to-fall-for-them-tom-phillips-jonn-elledge/#comments" rel="replies" thr:count="1" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-conspiracy-a-history-of-bollcks-theories-and-how-not-to-fall-for-them-tom-phillips-jonn-elledge/feed/atom/" rel="replies" thr:count="1" type="application/atom+xml"/>
+<thr:total>1</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: The Reincarnated Giant - Mingwei Song</title>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-reincarnated-giant-mingwei-song/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45218</id>
+<updated>2023-03-18T16:48:22Z</updated>
+<published>2023-04-02T11:34:25Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/><category scheme="https://shkspr.mobi/blog" term="chinese"/><category scheme="https://shkspr.mobi/blog" term="Sci Fi"/>
+<summary type="html">This is an anthology of modern Chinese science fiction, loosely grouped into three main themes. I'm sad to say that some of the stories are a lot of hard work. One is barely sci-fi - more like a spiritual paean to the souls of people caught in a disaster which, bizarrely, has a throwaway line [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/book-review-the-reincarnated-giant-mingwei-song/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/04/51OxIb3gR0L.jpg" alt="Book cover. A cybernetic man floats in a tangle of wires." width="200"  class="alignleft size-full wp-image-45220" /&gt;This is an anthology of modern Chinese science fiction, loosely grouped into three main themes.&lt;/p&gt;
+&lt;p&gt;I'm sad to say that some of the stories are a lot of hard work. One is barely sci-fi - more like a spiritual paean to the souls of people caught in a disaster which, bizarrely, has a throwaway line about aliens in it. One is an interminable description of domesticity which, if I've understood correctly ends in a manic sequence where an elderly author travels back in time to fuck someone who may or may not be the wife or mother of his time-travelling child. Yeah, me neither.&lt;/p&gt;
+&lt;p&gt;One story is almost dream-like in its babble. I'm not sure if that's by design or whether it is genuinely untranslatable.&lt;/p&gt;
+&lt;p&gt;Another story, which is quite good, starts with a long stream of life in rural China and switches, without warning, into space:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  He stood up again and continued on. He had not gone far before he turned into a bookstore. How wonderful the city was with its bookstores still open at night. He spent all his money, save for his return fare, on books to add to the school’s meager library. At midnight, carrying two heavy bundles of books, he boarded the train home.&lt;br /&gt;
+  Fifty thousand light-years from Earth, near the center of the Milky Way galaxy, an intergalactic war that had raged for twenty thousand years was near its conclusion.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;What?!&lt;/p&gt;
+&lt;p&gt;One of the stories is actually just a couple of chapters from a much longer novel. It was entertaining enough, but was a strange inclusion for a book of otherwise self-contained stories.&lt;/p&gt;
+&lt;p&gt;But... Some of the stories are absolute crackers!&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  Since Yiyi’s lectures on classical literature at the feedlot had a tranquilizing effect, producing a special flavor in his students’ meat, the dinosaurs left him alone
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;I mean - come on, that's worth the price of admission alone! Some of the stories are riffs on classics you've probably read before - and it's interesting to see a Chinese perspective on them.&lt;/p&gt;
+&lt;p&gt;Many of the stories flow heavily with beautiful symbolism. I'm sure that some of the symbolism in the stories is incredibly obvious to those with a deeper understanding of Chinese culture than I. There are some helpful footnotes scattered throughout which help orientate the lost reader - but they can't replicate the innate recognition which comes with immersion.&lt;/p&gt;
+&lt;p&gt;Some of the stories read, at times, like poetry:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  the error was like a small tear in the calf of a silk stocking, just a tiny cool spot at first, a premonition lying in the subconscious like a snake.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;I've certainly not seen anything that evocative in mainstream Western sci-fi.  It's full of these poetic rubies in the rubble.&lt;/p&gt;
+&lt;p&gt;Amusingly, some of the stories end with &lt;em&gt;very&lt;/em&gt; different moral lessons than you'd find in an English compendium. It certainly made me reflect on my baked-in cultural assumptions.&lt;/p&gt;
+&lt;p&gt;There are enough good stories in here to outweigh the bad, and they are &lt;em&gt;really&lt;/em&gt; good. But I'd recommend skipping through a few of the more tedious entries.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-reincarnated-giant-mingwei-song/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-the-reincarnated-giant-mingwei-song/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: Radicalized - Cory Doctorow</title>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-radicalized-cory-doctorow/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45163</id>
+<updated>2023-03-29T10:46:16Z</updated>
+<published>2023-04-01T11:34:50Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/><category scheme="https://shkspr.mobi/blog" term="future"/><category scheme="https://shkspr.mobi/blog" term="Sci Fi"/>
+<summary type="html">This is a difficult and disturbing book. It is a great read for any hacker - it's all about the way technology abuses people and how it radicalises people into fighting back. The dialogue is Socratic and the stories are a set of parables. The first asks us to consider what are the limits of [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/04/book-review-radicalized-cory-doctorow/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/9781789541106.jpg" alt="Book cover for Radicalized." width="200" class="alignleft size-full wp-image-45164" /&gt;This is a difficult and disturbing book. It is a great read for any hacker - it's all about the way technology abuses people and how it radicalises people into fighting back.&lt;/p&gt;
+&lt;p&gt;The dialogue is Socratic and the stories are a set of parables. The first asks us to consider what are the limits of protecting people? When we try to restrict technology "for your own good" it often has a degrading and dehumanising effect on people.&lt;/p&gt;
+&lt;p&gt;The second story is a re-hash of a recent episode of Super Girl. Is a Kryptonian superhero an immigrant? Are they white only by courtesy? Do they want to save the world - or do they want to make themselves feel better?&lt;/p&gt;
+&lt;p&gt;The third is deeply disturbing. It is a compelling dive into the community aspect of radicalisation. But it's difficult to write a story about "domestic terrorism" without straying dangerously close to &lt;em&gt;endorsing&lt;/em&gt; those radical and violent behaviours.&lt;/p&gt;
+&lt;p&gt;The final story is a beautifully told tale of how community, not individualism, protects people. It is, perhaps, a little gleeful in its spite - but the protagonists &lt;em&gt;truly&lt;/em&gt; deserve their fate.&lt;/p&gt;
+&lt;p&gt;If you're familiar with Doctorow's œuvre, there's nothing particularly new; technological abuse of freedom should be resisted. But it is great fun all the way through.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-radicalized-cory-doctorow/#comments" rel="replies" thr:count="2" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/04/book-review-radicalized-cory-doctorow/feed/atom/" rel="replies" thr:count="2" type="application/atom+xml"/>
+<thr:total>2</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: &amp;quot;You Are Not Expected to Understand This&amp;quot; How 26 Lines of Code Changed the World - Torie Bosch</title>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-you-are-not-expected-to-understand-this-how-26-lines-of-code-changed-the-world-torie-bosch/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45213</id>
+<updated>2023-03-16T21:57:08Z</updated>
+<published>2023-03-31T11:34:50Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/><category scheme="https://shkspr.mobi/blog" term="Computer Science"/>
+<summary type="html">A superb book! It traces the origins of 26 facets of modern life so that you can understand the code which underpins them. There's only a smattering of actual code you need to read - most of it is constrained to gorgeous hand-drawn illustrations. Although I got a bit of a shock in the 2nd [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/03/book-review-you-are-not-expected-to-understand-this-how-26-lines-of-code-changed-the-world-torie-bosch/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/9780691208480.jpg" alt="Book cover. Lines of code hover on a blue background." width="200" class="alignleft size-full wp-image-45216" /&gt;A superb book! It traces the origins of 26 facets of modern life so that you can understand the code which underpins them.&lt;/p&gt;
+&lt;p&gt;There's only a smattering of &lt;em&gt;actual&lt;/em&gt; code you need to read - most of it is constrained to gorgeous hand-drawn illustrations. Although I got a bit of a shock in the 2nd essay when I was confronted by &lt;code&gt;ξ3 &amp;lt; exp(ΔE/τ)&lt;/code&gt;! Thankfully the rest of the chapter does a good job of explaining it and why it is important.&lt;/p&gt;
+&lt;p&gt;There are some amazing confessionals from people who, arguably, made the world a little worse with their creations. It is a pity the author of the Morris worm refuses to discuss his creation though.&lt;/p&gt;
+&lt;p&gt;A few of the essays are a little credulous when it comes to grand claims - the BitCoin essay is laughably naïve - but these are relatively short sketches which will hopefully drive you to read more about their subject.&lt;/p&gt;
+&lt;p&gt;It does do a good job of pointing to papers I'd never heard of, like "&lt;a href="https://doi.org/10.1109/MAHC.2019.2897667"&gt;Hacking the Cis-team: Transgender Citizens and the Early Digital State&lt;/a&gt;" which describes how the binary of machines was used to rigidly enforce the gender binary. Sadly, it suffers a little from constantly using Wikipedia and Britannica for references - I'd much rather see source material.&lt;/p&gt;
+&lt;p&gt;There's an excellent range of information in here. It perfectly demonstrates that, of course, it isn't the lines of code which change the world - it's the people who dare to dream about a new paradigm.  Not everyone emerges from the book a hero, but they all made an impact.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-you-are-not-expected-to-understand-this-how-26-lines-of-code-changed-the-world-torie-bosch/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-you-are-not-expected-to-understand-this-how-26-lines-of-code-changed-the-world-torie-bosch/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: Stronger, Faster, and More Beautiful - Arwen Elys Dayton</title>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-stronger-faster-and-more-beautiful-arwen-elys-dayton/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45210</id>
+<updated>2023-03-16T20:24:33Z</updated>
+<published>2023-03-30T11:34:29Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/><category scheme="https://shkspr.mobi/blog" term="Sci Fi"/>
+<summary type="html">Wow! What a stunning book. It's a series of short stories - all taking place in a world where gene-editing isn't just legal; it's a sacrament. Each chapter jumps us further into the future. What starts off as an uncertain way to improve the human species gradually becomes more beautiful and more terrifying. Do you [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/03/book-review-stronger-faster-and-more-beautiful-arwen-elys-dayton/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/stronger.jpg" alt="Book cover featuring a woman&amp;#039;s head twisted as a spiral of DNA." width="200" class="alignleft size-full wp-image-45211" /&gt;Wow! What a stunning book. It's a series of short stories - all taking place in a world where gene-editing isn't just legal; it's a sacrament.&lt;/p&gt;
+&lt;p&gt;Each chapter jumps us further into the future. What starts off as an uncertain way to improve the human species gradually becomes more beautiful and more terrifying.&lt;/p&gt;
+&lt;p&gt;Do you lose your virginity if you do it with a reconstructed girl? What life is there for a baby with a genetically enhanced brain? Which of your principles will you sacrifice for the greater good? Is it ethical to experiment on yourself?&lt;/p&gt;
+&lt;p&gt;It's smart and shocking sci-fi, which asks uncompromising questions and vividly paints a picture of the world we might shortly inhabit.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-stronger-faster-and-more-beautiful-arwen-elys-dayton/#comments" rel="replies" thr:count="2" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-stronger-faster-and-more-beautiful-arwen-elys-dayton/feed/atom/" rel="replies" thr:count="2" type="application/atom+xml"/>
+<thr:total>2</thr:total>
+</entry>
+<entry>
+<author>
+<name>@edent</name>
+</author>
+<title type="html">Book Review: Shakespeare in Jest - Indira Ghose</title>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-shakespeare-in-jest-indira-ghose/" rel="alternate" type="text/html"/>
+<id>https://shkspr.mobi/blog/?p=45206</id>
+<updated>2023-03-29T10:20:57Z</updated>
+<published>2023-03-29T11:34:26Z</published>
+<category scheme="https://shkspr.mobi/blog" term="/etc/"/><category scheme="https://shkspr.mobi/blog" term="Book Review"/><category scheme="https://shkspr.mobi/blog" term="shakespeare"/>
+<summary type="html">This is a short but interesting look at the way Shakespeare's comedy was understood by his contemporaries - and how his legacy still influences modern comedians. There's a good deal of discussion about the role comedy played in society, and the interplay between actors and playwright would have worked. But, sadly, it never quite makes [&amp;#8230;]</summary>
+<content type="html" xml:base="https://shkspr.mobi/blog/2023/03/book-review-shakespeare-in-jest-indira-ghose/">&lt;p&gt;&lt;img decoding="async" src="https://shkspr.mobi/blog/wp-content/uploads/2023/03/9780367322458.jpg" alt="Book cover." width="200" class="alignleft size-full wp-image-45208" /&gt;This is a short but interesting look at the way Shakespeare's comedy was understood by his contemporaries - and how his legacy still influences modern comedians.&lt;/p&gt;
+&lt;p&gt;There's a good deal of discussion about the role comedy played in society, and the interplay between actors and playwright would have worked. But, sadly, it never quite makes the leap to demonstrate the way that. At best, we get fairly generic sketches like:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  most of Shakespeare’s witty characters are women. Their legacy is reflected in a surge of vibrant female comedy in the contemporary world.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;and&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  The dynamics between Beatrice and Benedict has inspired countless imitations in romantic comedy, in the theatre as well as in film: it has been a formative influence on the genre of screwball comedy. A latter-day revival of the formula of sparring antagonists who transmute into lovers is to be found in the film Intolerable Cruelty, directed by the Coen brothers.
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;Perhaps my favourite part was this exploration of &lt;a href="https://shkspr.mobi/blog/2021/03/playing-shakespeare/"&gt;MacBeth's Porter&lt;/a&gt;:&lt;/p&gt;
+&lt;blockquote&gt;&lt;p&gt;
+  This is the star turn in the Porter-jester’s repertoire. What remain unclear is the work the jokes are doing. Is Shakespeare baiting Jesuits to play to the crowd? Or could it be the case that by making his jester a drunken lout, he is mocking the mockers, and the rabid anti-Jesuit propaganda that poured from the printing presses?
+&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;It's the same about Alf Garnett and Al Murray's Landlord - do those being mocked understand that they're the butt of the joke? Ghose does an excellent job of showing that the issues with humour, racism, and social satire have always been with us.&lt;/p&gt;
+&lt;p&gt;The book is interesting - I just wish it would have been longer and more detailed.&lt;/p&gt;
+</content>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-shakespeare-in-jest-indira-ghose/#comments" rel="replies" thr:count="0" type="text/html"/>
+<link href="https://shkspr.mobi/blog/2023/03/book-review-shakespeare-in-jest-indira-ghose/feed/atom/" rel="replies" thr:count="0" type="application/atom+xml"/>
+<thr:total>0</thr:total>
+</entry>
+</feed>

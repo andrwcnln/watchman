@@ -1,0 +1,1856 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:wfw="http://wellformedweb.org/CommentAPI/">
+<channel>
+<title>daniel.haxx.se</title>
+<atom:link href="https://daniel.haxx.se/blog/feed/" rel="self" type="application/rss+xml"/>
+<link>https://daniel.haxx.se/blog</link>
+<description>tech, open source and networking</description>
+<lastBuildDate>Fri, 14 Apr 2023 14:05:51 +0000</lastBuildDate>
+<language>en-US</language>
+<sy:updatePeriod>
+	hourly	</sy:updatePeriod>
+<sy:updateFrequency>
+	1	</sy:updateFrequency>
+<generator>https://wordpress.org/?v=6.2</generator>
+<image>
+<url>https://daniel.haxx.se/blog/wp-content/uploads/2015/08/cropped-Daniel-head-greenshirt-32x32.jpg</url>
+<title>daniel.haxx.se</title>
+<link>https://daniel.haxx.se/blog</link>
+<width>32</width>
+<height>32</height>
+</image>
+<item>
+<title>curl speaks HTTP/2 with proxy</title>
+<link>https://daniel.haxx.se/blog/2023/04/14/curl-speaks-http-2-with-proxy/</link>
+<comments>https://daniel.haxx.se/blog/2023/04/14/curl-speaks-http-2-with-proxy/#respond</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Fri, 14 Apr 2023 14:00:45 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>HTTP2</category>
+<category>proxy</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22248</guid>
+<description>In September 2013 we merged the first code into curl that made it capable of using HTTP/2: HTTP version 2. This version of HTTP changed a lot of previous presumptions when it comes to transfers, which introduced quite a few challenges to HTTP stack authors all of the world. One of them being that with &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/04/14/curl-speaks-http-2-with-proxy/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;curl speaks HTTP/2 with proxy&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;In September 2013 we merged the first code into curl that made it capable of using HTTP/2: HTTP version 2.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;img decoding="async" width="400" height="400" src="https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo.png" alt="" class="wp-image-6917" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo.png 400w, https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo-150x150.png 150w, https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo-300x300.png 300w" sizes="(max-width: 400px) 100vw, 400px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This version of HTTP changed a lot of previous presumptions when it comes to transfers, which introduced quite a few challenges to HTTP stack authors all of the world. One of them being that with version 2 there can be more than one transfer using the same connection where as up to that point we had always just had one transfer per connection.&lt;/p&gt;
+
+
+
+&lt;p&gt;In May 2015 &lt;a href="https://daniel.haxx.se/blog/2015/05/15/rfc-7540-is-http2/" data-type="post" data-id="7069"&gt;the spec was published&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2023&lt;/h2&gt;
+
+
+
+&lt;p&gt;Now almost eight years since the RFC was published, HTTP/2 is the version seen most frequently in browser responses if we ask the &lt;a href="https://telemetry.mozilla.org"&gt;Firefox telemetry data&lt;/a&gt;. 44.4% of the responses are HTTP/2.&lt;/p&gt;
+
+
+
+&lt;figure class="wp-block-image size-full"&gt;&lt;a href="https://daniel.haxx.se/blog/wp-content/uploads/2023/04/HTTP-version-distribution-Firefox-beta-113-April-2023.png"&gt;&lt;img decoding="async" loading="lazy" width="1042" height="645" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/04/HTTP-version-distribution-Firefox-beta-113-April-2023.png" alt="" class="wp-image-22254"/&gt;&lt;/a&gt;&lt;/figure&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;curl&lt;/h2&gt;
+
+
+
+&lt;p&gt;This year, the curl project has been &lt;a href="https://daniel.haxx.se/blog/2022/10/19/funded-curl-improvements/" data-type="post" data-id="20153"&gt;sponsored by the Sovereign Tech Fund&lt;/a&gt;, and one of the projects this funding has covered is what I am here to talk about:&lt;/p&gt;
+
+
+
+&lt;p&gt;Speaking HTTP/2 with a proxy. More specifically with what is commonly referred to as a &amp;#8220;forward proxy.&amp;#8221;&lt;/p&gt;
+
+
+
+&lt;p&gt;Many organizations and companies have setups like the one illustrated in this image below. The user on the left is inside the organization network A and the website they want to reach is on the outside on network B.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;img decoding="async" loading="lazy" width="792" height="181" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/11/HTTPS-proxy.png" alt="" class="wp-image-9505" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/11/HTTPS-proxy.png 792w, https://daniel.haxx.se/blog/wp-content/uploads/2016/11/HTTPS-proxy-200x46.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/11/HTTPS-proxy-450x103.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2016/11/HTTPS-proxy-768x176.png 768w" sizes="(max-width: 792px) 100vw, 792px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;h2 class="wp-block-heading"&gt;HTTP/2 to the proxy&lt;/h2&gt;
+
+
+
+&lt;p&gt;When this is an HTTPS proxy, meaning that the communication to and with the proxy is itself protected with TLS, curl and libcurl are now capable of negotiating HTTP/2 with it.&lt;/p&gt;
+
+
+
+&lt;p&gt;It might not seem like a big deal to most people, and maybe it is not, but the introduction of this feature comes after some rather heavy lifting and internal refactors over the recent months that have enabled the rearrangement of networking components for this purpose.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Enable&lt;/h2&gt;
+
+
+
+&lt;p&gt;To enable this feature in your libcurl-using application, you first need to make sure you use libcurl 8.1.0 when it ships in mid May and then you need to set &lt;a href="https://curl.se/libcurl/c/CURLOPT_PROXYTYPE.html"&gt;the proxy type&lt;/a&gt; to &lt;code&gt;CURLPROXY_HTTPS2&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;In plain C code it could look like this:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;curl_easy_setopt(handle,
+                 CURLOPT_PROXYTYPE,
+                 CURLPROXY_HTTPS2);
+curl_easy_setopt(handle,
+                 CURLOPT_PROXY,
+                 "https://hostname");&lt;/pre&gt;
+
+
+
+&lt;p&gt;This &lt;em&gt;allows&lt;/em&gt; HTTP/2 but will proceed with plain old HTTP/1 if it can&amp;#8217;t negotiate the higher protocol version using ALPN.&lt;/p&gt;
+
+
+
+&lt;p&gt;The old proxy type called just &lt;code&gt;CURLPROXY_HTTPS&lt;/code&gt; remains for asking libcurl to stick to HTTP/1 when talking to the proxy. We decided to introduce a new option for this simply because we anticipate that there will be proxies out there that will not work correctly so we cannot throw this feature at users without them asking for it.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;command line tool&lt;/h2&gt;
+
+
+
+&lt;p&gt;Using the command line tool, you use a HTTPS proxy exactly like before and then you add this flag to tell the tool that it may try HTTP/2 with the proxy: &lt;code&gt;&lt;a href="https://curl.se/docs/manpage.html#--proxy-http2"&gt;--proxy-http2&lt;/a&gt;&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;This also happens to be curl&amp;#8217;s 251st command line option.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Shipping and credits&lt;/h2&gt;
+
+
+
+&lt;p&gt;This implementation has been done by Stefan Eissing.&lt;/p&gt;
+
+
+
+&lt;p&gt;These features have already landed in the master branch and will be part of the pending curl 8.1.0 release, scheduled for release on May 17, 2023.&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/04/14/curl-speaks-http-2-with-proxy/feed/</wfw:commentRss>
+<slash:comments>0</slash:comments>
+</item>
+<item>
+<title>trurl manipulates URLs</title>
+<link>https://daniel.haxx.se/blog/2023/04/03/introducing-trurl/</link>
+<comments>https://daniel.haxx.se/blog/2023/04/03/introducing-trurl/#comments</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Mon, 03 Apr 2023 06:59:14 +0000</pubDate>
+<category>Network</category>
+<category>Open Source</category>
+<category>Web</category>
+<category>trurl</category>
+<category>URL</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22157</guid>
+<description>trurl is a tool in a similar spirit of tr but for URLs. Here, tr stands for translate or transpose. trurl is a small command line tool that parses and manipulates URLs, designed to help shell script authors everywhere. URLs are tricky to parse and there are numerous security problems in software because of this. &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/04/03/introducing-trurl/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;trurl manipulates URLs&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;&lt;em&gt;&lt;a href="https://github.com/curl/trurl"&gt;trurl&lt;/a&gt;&lt;/em&gt; is a tool in a similar spirit of &lt;a href="https://en.wikipedia.org/wiki/Tr_(Unix)"&gt;tr&lt;/a&gt; but for URLs. Here, tr stands for &lt;em&gt;translate&lt;/em&gt; or &lt;em&gt;transpose&lt;/em&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;trurl is a small command line tool that parses and manipulates URLs, designed to help shell script authors everywhere.&lt;/p&gt;
+
+
+
+&lt;p&gt;URLs are tricky to parse and there are numerous security problems in software because of this. trurl wants to help soften this problem by taking away the need for script and command line authors everywhere to re-invent the wheel over and over.&lt;/p&gt;
+
+
+
+&lt;p&gt;trurl uses libcurl&amp;#8217;s URL parser and will thus parse and understand URLs &lt;em&gt;exactly&lt;/em&gt; the same as &lt;a href="https://curl.se/"&gt;curl the command line tool&lt;/a&gt; does &amp;#8211; making it the perfect companion tool.&lt;/p&gt;
+
+
+
+&lt;p&gt;I created trurl on March 31, 2023.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Some command line examples&lt;/h2&gt;
+
+
+
+&lt;p&gt;Given just a URL (even without scheme), it will parse it and output a normalized version:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl ex%61mple.com/
+http://example.com/&lt;/pre&gt;
+
+
+
+&lt;p&gt;The above command will &lt;em&gt;guess&lt;/em&gt; on a &lt;code&gt;http://&lt;/code&gt; scheme when none was provided. The guess has basic heuristics, like for example FTP server host names often starts with ftp:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl ftp.ex%61mple.com/
+ftp://ftp.example.com/&lt;/pre&gt;
+
+
+
+&lt;p&gt;A user can output selected components of a provided URL. Like if you only want to extract the path or the query components from it.:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se/?search=foobar --get '{path}'
+/&lt;/pre&gt;
+
+
+
+&lt;p&gt;Or both (with extra text intermixed):&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se/?search=foobar --get 'p: {path} q: {query}'
+p: / q: search=foobar&lt;/pre&gt;
+
+
+
+&lt;p&gt;A user can create a URL by providing the different components one by one and trurl outputs the URL:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl --set scheme=https --set host=fool.wrong
+https://fool.wrong/&lt;/pre&gt;
+
+
+
+&lt;p&gt;Reset a specific previously populated component by setting it to nothing. Like if you want to clear the user component:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://daniel@curl.se/--set user=
+https://curl.se/&lt;/pre&gt;
+
+
+
+&lt;p&gt;trurl tells you the full new URL when the first URL is redirected to a second relative URL:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se/we/are/here.html --redirect "../next.html"
+https://curl.se/we/next.html&lt;/pre&gt;
+
+
+
+&lt;p&gt;trurl provides easy-to-use options for adding new segments to a URL&amp;#8217;s path and query components. Not always easily done in shell scripts:&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se/we/are --append path=index.html
+https://curl.se/we/are/index.html&lt;/pre&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se?info=yes --append query=user=loggedin
+https://curl.se/?info=yes&amp;amp;user=loggedin&lt;/pre&gt;
+
+
+
+&lt;p&gt;trurl can work on a single URL or &lt;em&gt;any amount&lt;/em&gt; of URLs passed on to it. The modifications and extractions are then performed on them all, one by one.&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ trurl https://curl.se localhost example.com 
+https://curl.se/
+http://localhost/
+http://example.com/&lt;/pre&gt;
+
+
+
+&lt;p&gt;trurl can read URLs to work on off a file or from stdin, and works on them in a streaming fashion suitable for filters etc.&lt;/p&gt;
+
+
+
+&lt;pre class="wp-block-preformatted"&gt;$ cat many-urls.yxy | trurl --url-file -
+...&lt;/pre&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;More or different&lt;/h2&gt;
+
+
+
+&lt;p&gt;trurl was born just a few days ago, this is what we have made it do so far. There is a high probability that it will change further going forward before it settles on exactly how things ideally &lt;em&gt;should&lt;/em&gt; work.&lt;/p&gt;
+
+
+
+&lt;p&gt;It also means that we are extra open for and welcoming to feedback, ideas and pull-requests. With some luck, this could become a new everyday tool for all of us.&lt;/p&gt;
+
+
+
+&lt;p&gt;Tell us on &lt;a href="https://github.com/curl/trurl"&gt;GitHub&lt;/a&gt;!&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/04/03/introducing-trurl/feed/</wfw:commentRss>
+<slash:comments>2</slash:comments>
+</item>
+<item>
+<title>Pre-notification dilemmas</title>
+<link>https://daniel.haxx.se/blog/2023/03/29/pre-notification-dilemmas/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/29/pre-notification-dilemmas/#comments</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Wed, 29 Mar 2023 12:17:56 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>Security</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22065</guid>
+<description>In 2011 I started to send &amp;#8220;pre-notifications&amp;#8221; about pending curl security vulnerabilities to the distros mailing list (back then it was still called linux-distros). For several years we also asked them for CVE IDs for the new vulnerabilities that we were about to publish to the world. By notifying the distros ahead of time, the &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/29/pre-notification-dilemmas/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;Pre-notification dilemmas&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;In 2011 I started to send &amp;#8220;pre-notifications&amp;#8221; about pending &lt;a href="https://curl.se/"&gt;curl&lt;/a&gt; security vulnerabilities to the &lt;a href="https://oss-security.openwall.org/wiki/mailing-lists/distros"&gt;distros mailing list&lt;/a&gt; (back then it was still called &lt;em&gt;linux-distros&lt;/em&gt;).&lt;/p&gt;
+
+
+
+&lt;p&gt;For several years we also asked them for CVE IDs for the new vulnerabilities that we were about to publish to the world. By notifying the distros ahead of time, the idea is that they get a little head-start to fix their curl packages so that at the day when we publish the vulnerabilities to the world, they can already provide curl upgrades.&lt;/p&gt;
+
+
+
+&lt;p&gt;The gap from us announcing a flaw until they offer curl upgrades could ideally be made a minimum.&lt;/p&gt;
+
+
+
+&lt;p&gt;The distros list&amp;#8217;s rules forbid us to tell them more than 10 days before the planned release day. They call this an embargo as they are expected to not tell anyone who is not a mailing list member about these flaws.&lt;/p&gt;
+
+
+
+&lt;p&gt;During the last twelve plus years, I have told them about almost 130 pending &lt;a href="https://curl.se/docs/security.html"&gt;curl vulnerabilities&lt;/a&gt; like this up until today.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Secrets are hard&lt;/h2&gt;
+
+
+
+&lt;p&gt;For an open source project that has all its processes and test infrastructure public and open there are several challenges with how to deal with secrets, such as vulnerabilities and their corresponding fixes.&lt;/p&gt;
+
+
+
+&lt;p&gt;We recently &lt;a href="https://github.com/curl/curl/pull/10719"&gt;updated our security process&lt;/a&gt; in the curl project: we have noticed that we have previously &amp;#8211; several times &amp;#8211; landed fixes to security problems that were defective and in some cases did not even fix the reported problem correctly. I believe one reason for this is that we had this policy to make the fix into a (public) pull-request no earlier than 48 hours before the pending release. 48 hours is enough to make all the tests and CI verify the fix, but it is a very short time window for the community to react or be able to test and find any problems with the fixes before the release goes out.&lt;/p&gt;
+
+
+
+&lt;p&gt;As an attempt to do better we have tweaked our policy. If a reported security problem is deemed to be of severity low or severity medium, we will instead allow and rather push for turning the fix into a public pull-request much earlier. We will however not mention the security aspect of the fix in the public communication about the pull-request, but only talk about the bugfix aspect.&lt;/p&gt;
+
+
+
+&lt;p&gt;This will allow us to merge fixes earlier in the release cycle. To give the bugfixes more time to mature and ripe in the repository before the pending release. It should increase the chances that we can do follow-up fixes and truly make it a good correction by the time we do the next release. Hopefully it leads to better releases with fewer regressions.&lt;/p&gt;
+
+
+
+&lt;p&gt;Of course the risk with this is that a malicious user somewhere finds out about a vulnerability this way, earlier than 48 hours before a release, and therefore gets an extended time window to perform nefarious actions. That is also why we limit this method to severity low and medium issues, as the ones rated more serious are deemed too dangerous to risk.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Policy vs policy&lt;/h2&gt;
+
+
+
+&lt;p&gt;The week before we were about to ship the curl 8.0.0 release, I emailed the distros mailing list again like I have done so many times before and told them about the upcoming six(!) vulnerabilities we were about to reveal to the world.&lt;/p&gt;
+
+
+
+&lt;p&gt;This time turned out to be different.&lt;/p&gt;
+
+
+
+&lt;p&gt;Because of our updated policy where the fixes were already committed in a public git repository, the distros mailing list&amp;#8217;s policy says that if there is a public commit they consider the issue to be public and thus they refuse to accept any embargo.&lt;/p&gt;
+
+
+
+&lt;p&gt;What they call embargo I of course call heads-up time.&lt;/p&gt;
+
+
+
+&lt;p&gt;I argue that while the fixes are public, the actual vulnerabilities and the security issues those fixes rectify are not. It takes a serious effort and pretty good insights to just &lt;em&gt;detect&lt;/em&gt; that one or more of the commits for the pending release are done because of a security problem and then even more so if you want to convert that suspicion into an actual attack vector.&lt;/p&gt;
+
+
+
+&lt;p&gt;They maintain that while they could make an exception for me/us this time, this is an exception and their policy says this is not acceptable for embargos.&lt;/p&gt;
+
+
+
+&lt;p&gt;If we make commits public before telling distros, we may not &amp;#8220;ask for an embargo&amp;#8221;.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;So we won&amp;#8217;t tell&lt;/h2&gt;
+
+
+
+&lt;p&gt;I thought we were doing this &lt;em&gt;for their benefit&lt;/em&gt;. I was under the impression that we actually helped distributors of open source operating systems by telling them ahead of time what was going to ship very soon that they might want to get a head-start on so that their users stay protected.&lt;/p&gt;
+
+
+
+&lt;p&gt;I have been told in very clear terms that they do not want to be notified about vulnerabilities ahead of time if the commits are public.&lt;/p&gt;
+
+
+
+&lt;p&gt;I have informed them that I will not tell them anymore until they change their minds because I think our updated security process can make our releases better and I think improving curl and making better releases is more important than telling distros ahead of time.&lt;/p&gt;
+
+
+
+&lt;p&gt;I cannot understand how this stubbornness makes anything better for them. For me, it takes away some amount of work so I will manage just fine. For curl users &amp;#8220;in the wild&amp;#8221;, this will probably mean that they will get security-patched curl releases from their distros a little slower in the future.&lt;/p&gt;
+
+
+
+&lt;p&gt;We rarely see curl vulnerabilities rated higher than medium so this means we will effectively stop emailing distros about pending flaws. We are still &lt;em&gt;allowed&lt;/em&gt; to tell them about more criticality scored vulnerabilities but I must confess I feel less inclined to do that than I used to.&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/29/pre-notification-dilemmas/feed/</wfw:commentRss>
+<slash:comments>1</slash:comments>
+</item>
+<item>
+<title>a Bloomberg donation</title>
+<link>https://daniel.haxx.se/blog/2023/03/28/a-bloomberg-donation/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/28/a-bloomberg-donation/#respond</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Tue, 28 Mar 2023 21:19:01 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>sponsors</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22176</guid>
+<description>Hi curl admins, Alyssa here from the Bloomberg Open Source Program Office. I wanted to let you know that curl was selected as a winner in our inaugural FOSS Contributor Fund! We wanted to let you know of the results before we transferred funds via Open Source Collective. Can you confirm you&amp;#8217;ve received this message? &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/28/a-bloomberg-donation/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;a Bloomberg donation&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-large is-resized"&gt;&lt;a href="https://curl.se/"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-1200x459.png" alt="" class="wp-image-8936" width="420" height="160" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-1200x459.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-200x76.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-450x172.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-768x294.png 768w" sizes="(max-width: 420px) 100vw, 420px" /&gt;&lt;/a&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;blockquote class="wp-block-quote"&gt;
+&lt;p&gt;Hi curl admins, Alyssa here from the Bloomberg Open Source Program Office. I wanted to let you know that curl was selected as a winner in our inaugural FOSS Contributor Fund! We wanted to let you know of the results before we transferred funds via Open Source Collective. Can you confirm you&amp;#8217;ve received this message? Again, we&amp;#8217;re super excited to support your work and excited that you were selected in our inaugural vote! Please let us know if we can be of any further support. All best, Alyssa.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+
+
+&lt;p&gt;The quote above was received by the curl team on March 27, 2023 and&amp;#8230;&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Open Collective&lt;/h2&gt;
+
+
+
+&lt;p&gt;All curl funds are held by &lt;a href="https://opencollective.com/curl"&gt;Open Collective&lt;/a&gt;, as the curl project is not a legal entity and cannot hold on to money or any assets at all really on its own.&lt;/p&gt;
+
+
+
+&lt;p&gt;Bloomberg&amp;#8217;s donation was directed directly to Open Collective and below is a screenshot from there:&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;img decoding="async" loading="lazy" width="466" height="126" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/Screenshot-2023-03-28-at-23-07-30-curl-Open-Collective.png" alt="" class="wp-image-22180"/&gt;&lt;figcaption class="wp-element-caption"&gt;Screenshot from curl&amp;#8217;s fund at Open Collective&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;h2 class="wp-block-heading"&gt;Grateful&lt;/h2&gt;
+
+
+
+&lt;p&gt;We are of course grateful for this generous donation and we will make sure that we spend this money on activities that bring the project forward. A pledge we do for all money ever donated to us. We are determined to live up to the highest expectations of excellency that our awesome sponsors and donors might have on us. Now and in the future.&lt;/p&gt;
+
+
+
+&lt;p&gt;On the behalf of the curl project: Thank you Bloomberg!&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/28/a-bloomberg-donation/feed/</wfw:commentRss>
+<slash:comments>0</slash:comments>
+</item>
+<item>
+<title>curl code coverage</title>
+<link>https://daniel.haxx.se/blog/2023/03/28/curl-code-coverage/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/28/curl-code-coverage/#respond</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Tue, 28 Mar 2023 07:40:51 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>source code</category>
+<category>testing</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=21961</guid>
+<description>Every once in a while someone brings up the topic of code coverage in relation to curl. What portion of the code is actually exercised when running the tests? Honestly, we don&amp;#8217;t know. We can&amp;#8217;t figure it out. We are not trying to figure it out. We have to live with this. We used to &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/28/curl-code-coverage/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;curl code coverage&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;Every once in a while someone brings up the topic of code coverage in relation to curl. What portion of the code is actually exercised when running the tests?&lt;/p&gt;
+
+
+
+&lt;p&gt;Honestly, &lt;strong&gt;we don&amp;#8217;t know&lt;/strong&gt;. We can&amp;#8217;t figure it out. We are not trying to figure it out. We have to live with this.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;We used to get a number&lt;/h2&gt;
+
+
+
+&lt;p&gt;A few years back we actually did a build and a test run in our CI setup that used one of those cloud services that would monitor the code coverage and warn if we would commit something that drastically reduced coverage.&lt;/p&gt;
+
+
+
+&lt;p&gt;This had significant drawbacks:&lt;/p&gt;
+
+
+
+&lt;p&gt;First, the service was unstable which made it occasionally sound the horns because we had gone down to 0% coverage and that is bad.&lt;/p&gt;
+
+
+
+&lt;p&gt;Secondly, it made parts of the audience actually believe that what was reported by that service for a single build and a single test run was the final and accurate code coverage number. It was far from it.&lt;/p&gt;
+
+
+
+&lt;p&gt;We ended up ditching that job as it did very little good but some amount of harm.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Different build combinations &amp;#8211; and platforms&lt;/h2&gt;
+
+
+
+&lt;p&gt;Code coverage is typically the number of lines of code that were executed as a share out of the total amount of &lt;em&gt;possible&lt;/em&gt; lines (lines that were compiled and used in the build, not lines of code that were not included in the complete source). Since curl offers literally many million build combinations, an evaluated code coverage number can only apply to that specific build combination. When using that exact setup and running a particular set of tests on a fixed platform.&lt;/p&gt;
+
+
+
+&lt;p&gt;Just getting the coverage rate off &lt;em&gt;one&lt;/em&gt; of these builds is easy enough but is hardly representing the true number as we run tests on many build combinations doing many different tests.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Can&amp;#8217;t do it all in a single test run&lt;/h2&gt;
+
+
+
+&lt;p&gt;We run many different tests and some of the tests we limit and split up into several different specific CI jobs since they are very slow and by doing a smaller portion of the jobs in separate CI jobs, we allow them to run in parallel and thus complete faster. That is super complicated from a code coverage point of view as we would have to merge coverage data between numerous independent and isolated build runs, possibly running on different services, to get a number approaching the truth.&lt;/p&gt;
+
+
+
+&lt;p&gt;We don&amp;#8217;t even try to do this.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Not the panacea&lt;/h2&gt;
+
+
+
+&lt;p&gt;Eventually, even if we would be able to get a unified number from a hundred different builds and test runs spread over many platforms, what would it tell us?&lt;/p&gt;
+
+
+
+&lt;p&gt;libcurl has literally over 300 run-time options that can be used in combinations. Running through the code with a few different option combinations could theoretically reach almost complete code coverage and yet only test a fraction of the possibilities.&lt;/p&gt;
+
+
+
+&lt;p&gt;But yes: it would help us identify source code lines that are never executed when the tests run and it would be very useful.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Instead&lt;/h2&gt;
+
+
+
+&lt;p&gt;We rely on manual (and more error-prone) methods of identifying what parts of the code we need to add more tests for. This is hard, and generally the best way to find weak spots is when someone reports a bug or a regression as that usually means that there was a lack of tests for that area that allowed the problem to sneak in undetected.&lt;/p&gt;
+
+
+
+&lt;p&gt;Of course we also need to make sure that all new features and functions get test cases added in parallel.&lt;/p&gt;
+
+
+
+&lt;p&gt;This is a rather weak system but we have not managed to make a better one yet.&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/28/curl-code-coverage/feed/</wfw:commentRss>
+<slash:comments>0</slash:comments>
+</item>
+<item>
+<title>curl 8.0.1 because I jinxed it</title>
+<link>https://daniel.haxx.se/blog/2023/03/20/curl-8-0-1-because-i-jinxed-it/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/20/curl-8-0-1-because-i-jinxed-it/#comments</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Mon, 20 Mar 2023 14:00:31 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>release</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22142</guid>
+<description>Right. I said in the 8.0.0 blog post that it might be a good release. It was. Apart form the little bug that caused it to crash in several test cases. So now we shipped curl 8.0.1, which is almost identical apart from a single commit that was reverted. Exactly why this was not discovered &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/20/curl-8-0-1-because-i-jinxed-it/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;curl 8.0.1 because I jinxed it&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;Right. I said in the &lt;a href="https://daniel.haxx.se/blog/2023/03/20/curl-8-0-0-is-here/" data-type="post" data-id="22030"&gt;8.0.0 blog post&lt;/a&gt; that it might be a good release. It was. Apart form the little bug that caused it to crash in several test cases.&lt;/p&gt;
+
+
+
+&lt;p&gt;So now we shipped curl 8.0.1, which is almost identical apart from a single commit that was reverted.&lt;/p&gt;
+
+
+
+&lt;p&gt;Exactly why this was not discovered in our tests and CI jobs before the release we have yet to figure out, but it is certainly more than just a little disturbing.&lt;/p&gt;
+
+
+
+&lt;p&gt;My deepest apologies for this.&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/20/curl-8-0-1-because-i-jinxed-it/feed/</wfw:commentRss>
+<slash:comments>44</slash:comments>
+</item>
+<item>
+<title>curl 8.0.0 is here</title>
+<link>https://daniel.haxx.se/blog/2023/03/20/curl-8-0-0-is-here/</link>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Mon, 20 Mar 2023 07:15:13 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>release</category>
+<category>Security</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22030</guid>
+<description>Exactly one month since the previous release, we are happy to give you curl 8.0.0 released on curl&amp;#8217;s official 25th birthday. This a major version number bump but without any ground-breaking changes or fireworks. We decided it was about time to reset the minor number down to more a manageable level and doing it exactly &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/20/curl-8-0-0-is-here/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;curl 8.0.0 is here&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;Exactly one month since &lt;a href="https://daniel.haxx.se/blog/2023/02/20/7-88-1-the-second-final-one/" data-type="post" data-id="21768"&gt;the previous release&lt;/a&gt;, we are happy to give you &lt;strong&gt;curl 8.0.0&lt;/strong&gt; released on curl&amp;#8217;s &lt;a href="https://daniel.haxx.se/blog/2023/03/20/twenty-five-years-of-curl/" data-type="post" data-id="21514"&gt;official 25th birthday&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;This a major version number bump but without any ground-breaking changes or fireworks. We decided it was about time to reset the minor number down to more a  manageable level and doing it exactly on curl&amp;#8217;s 25th birthday made it extra fun. &lt;strong&gt;There is no API nor ABI break in this version.&lt;/strong&gt;&lt;/p&gt;
+
+
+
+&lt;p&gt;This is likely the best curl release we ever made.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Release video presentation&lt;/h2&gt;
+
+
+
+&lt;figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio"&gt;&lt;div class="wp-block-embed__wrapper"&gt;
+&lt;iframe loading="lazy" title="curl 8.0.0 with Daniel Stenberg" width="474" height="267" src="https://www.youtube.com/embed/LToOQEMcKoo?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen&gt;&lt;/iframe&gt;
+&lt;/div&gt;&lt;/figure&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;curl 25 years celebrations&lt;/h2&gt;
+
+
+
+&lt;p&gt;Note the &lt;a href="https://daniel.haxx.se/blog/2023/03/10/curl-25-years-online-celebration/" data-type="post" data-id="21645"&gt;additional event happening&lt;/a&gt; later on March 20. and &lt;a href="https://pod.fossified.com/2023/03/19/s01e02.html"&gt;the Fossified podcast episode on curl 25 years&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Numbers&lt;/h2&gt;
+
+
+
+&lt;p class="has-text-align-center"&gt;&lt;strong&gt;the 215th release&lt;br&gt;1 changes&lt;br&gt;28 days (total: 9,131)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;130 bug-fixes (total: 8,820)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;189 commits (total: 30,042)&lt;br&gt;0 new public libcurl function (total: 91)&lt;br&gt;0 new curl_easy_setopt() option (total: 302)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;0 new curl command line option (total: 250)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;42 contributors, 23 new (total: 2,841)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;21 authors, 5 new (total: 1,125)&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;6 security fixes (total: 141)&lt;/strong&gt;&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Security&lt;/h2&gt;
+
+
+
+&lt;p&gt;We disclose six new vulnerabilities today, five of them at severity &lt;strong&gt;Low&lt;/strong&gt; and one of them at &lt;strong&gt;Medium&lt;/strong&gt;.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27533.html"&gt;CVE-2023-27533&lt;/a&gt;: TELNET option IAC injection&lt;/h3&gt;
+
+
+
+&lt;p&gt;curl supports communicating using the TELNET protocol and as a part of this it offers users to pass on user name and &amp;#8220;telnet options&amp;#8221; for the server negotiation.&lt;/p&gt;
+
+
+
+&lt;p&gt;Due to lack of proper input scrubbing and without it being the documented functionality, curl would pass on user name and telnet options to the server as provided. This could allow users to pass in carefully crafted content that pass on content or do option negotiation without the application intending to do so. In particular if an application for example allows users to provide the data or parts of the data.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27534.html"&gt;CVE-2023-27534&lt;/a&gt;: SFTP path ~ resolving discrepancy&lt;/h3&gt;
+
+
+
+&lt;p&gt;curl supports SFTP transfers. curl&amp;#8217;s SFTP implementation offers a special feature in the path component of URLs: a tilde (&lt;code&gt;~&lt;/code&gt;) character as the first path element in the path to denotes a path relative to the user&amp;#8217;s home directory. This is supported because of wording in the &lt;a href="https://datatracker.ietf.org/doc/html/draft-ietf-secsh-scp-sftp-ssh-uri-04"&gt;once proposed to-become RFC draft&lt;/a&gt; that was to dictate how SFTP URLs work.&lt;/p&gt;
+
+
+
+&lt;p&gt;Due to a bug, the handling of the tilde in SFTP path did however not only replace it when it is used stand-alone as the first path element but also wrongly when used as a mere prefix in the first element.&lt;/p&gt;
+
+
+
+&lt;p&gt;Using a path like /~2/foo when accessing a server using the user dan (with home directory /home/dan) would then quite surprisingly access the file &lt;code&gt;/home/dan2/foo&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;This can be taken advantage of to circumvent filtering or worse.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27535.html"&gt;CVE-2023-27535&lt;/a&gt;: FTP too eager connection reuse&lt;/h3&gt;
+
+
+
+&lt;p&gt;libcurl would reuse a previously created FTP connection even when one or more options had been changed that could have made the effective user a very different one, thus leading to the doing the second transfer with wrong credentials.&lt;/p&gt;
+
+
+
+&lt;p&gt;libcurl keeps previously used connections in a connection pool for subsequent transfers to reuse if one of them matches the setup. However, several FTP settings were left out from the configuration match checks, making them match too easily. The settings in questions are &lt;code&gt;&lt;a href="https://curl.se/libcurl/c/CURLOPT_FTP_ACCOUNT.html"&gt;CURLOPT_FTP_ACCOUNT&lt;/a&gt;&lt;/code&gt;, &lt;code&gt;&lt;a href="https://curl.se/libcurl/c/CURLOPT_FTP_ALTERNATIVE_TO_USER.html"&gt;CURLOPT_FTP_ALTERNATIVE_TO_USER&lt;/a&gt;&lt;/code&gt;, &lt;code&gt;&lt;a href="https://curl.se/libcurl/c/CURLOPT_FTP_SSL_CCC.html"&gt;CURLOPT_FTP_SSL_CCC&lt;/a&gt;&lt;/code&gt; and &lt;code&gt;&lt;a href="https://curl.se/libcurl/c/CURLOPT_USE_SSL.html"&gt;CURLOPT_USE_SSL&lt;/a&gt;&lt;/code&gt; level.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27536.html"&gt;CVE-2023-27536&lt;/a&gt;: GSS delegation too eager connection re-use&lt;/h3&gt;
+
+
+
+&lt;p&gt;libcurl would reuse a previously created connection even when the GSS delegation (&lt;code&gt;&lt;a href="https://curl.se/libcurl/c/CURLOPT_GSSAPI_DELEGATION.html"&gt;CURLOPT_GSSAPI_DELEGATION&lt;/a&gt;&lt;/code&gt;) option had been changed that could have changed the user&amp;#8217;s permissions in a second transfer.&lt;/p&gt;
+
+
+
+&lt;p&gt;libcurl keeps previously used connections in a connection pool for subsequent transfers to reuse if one of them matches the setup. However, this GSS delegation setting was left out from the configuration match checks, making them match too easily, affecting krb5/kerberos/negotiate/GSSAPI transfers.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27537.html"&gt;CVE-2023-27537&lt;/a&gt;: HSTS double-free&lt;/h3&gt;
+
+
+
+&lt;p&gt;libcurl supports sharing HSTS data between separate &amp;#8220;handles&amp;#8221;. This sharing was introduced without considerations for do this sharing across separate threads but there was no indication of this fact in the documentation.&lt;/p&gt;
+
+
+
+&lt;p&gt;Due to missing mutexes or thread locks, two threads sharing the same HSTS data could end up doing a double-free or use-after-free.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;&lt;a href="https://curl.se/docs/CVE-2023-27538.html"&gt;CVE-2023-27538&lt;/a&gt;: SSH connection too eager reuse still&lt;/h3&gt;
+
+
+
+&lt;p&gt;libcurl would reuse a previously created connection even when an SSH related option had been changed that should have prohibited reuse.&lt;/p&gt;
+
+
+
+&lt;p&gt;libcurl keeps previously used connections in a connection pool for subsequent transfers to reuse if one of them matches the setup. However, two SSH settings were left out from the configuration match checks, making them match too easily.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Changes&lt;/h2&gt;
+
+
+
+&lt;p&gt;There is only one actual &amp;#8220;change&amp;#8221; in this release. This is the first curl release to drop support for building on a systems that lack a working 64 bit data type. curl now requires that &amp;#8216;&lt;code&gt;long long&lt;/code&gt;&amp;#8216; or an equivalent exists.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Bugfixes&lt;/h2&gt;
+
+
+
+&lt;p&gt;This release cycle was half the length of a regular one but yet we managed to merge an impressive amount of bugfixes. Below I highlight a few that I think deserve a special mention.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;build: drop the use of XC_AMEND_DISTCLEAN&lt;/h3&gt;
+
+
+
+&lt;p&gt;A strange description but this change removed an old autotools macro that made configure sometimes &amp;#8220;balloon&amp;#8221; Makefiles to several gigabytes.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;connect: fix time_connect and time_appconnect timer statistics&lt;/h3&gt;
+
+
+
+&lt;p&gt;A regression after the new happy eyeball h2/h3 connect approach was introduced.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;curl.1: list all &amp;#8220;global options&amp;#8221;&lt;/h3&gt;
+
+
+
+&lt;p&gt;Command line options that survive the use of &lt;code&gt;--next&lt;/code&gt; are called &amp;#8220;global options&amp;#8221; and the man page now lists all of them for easier identification.&lt;/p&gt;
+
+
+
+&lt;p&gt;To accomplish this, there is a new metadata &amp;#8220;tag&amp;#8221; for this purpose to mark the global options in their corresponding docs files.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;ftp: active mode with SSL, add the filter&lt;/h3&gt;
+
+
+
+&lt;p&gt;Regression: FTPS in active mode did not setup the data connection correctly.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;replaced sscanf() in several parsers&lt;/h3&gt;
+
+
+
+&lt;p&gt;From 24 occurrences of &lt;code&gt;sscanf()&lt;/code&gt; calls in the code in the previous release, down to just 4 left.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;headers: make curl_easy_header and nextheader return different buffers&lt;/h3&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;http2 bugfixes&lt;/h3&gt;
+
+
+
+&lt;ul&gt;
+&lt;li&gt;error handling during parallel operations&lt;/li&gt;
+
+
+
+&lt;li&gt;fix http2 prior knowledge when reusing connections&lt;/li&gt;
+
+
+
+&lt;li&gt;RST and GOAWAY better recognize partial transfers&lt;/li&gt;
+
+
+
+&lt;li&gt;avoid upload busy loop&lt;/li&gt;
+&lt;/ul&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;http: don&amp;#8217;t send 100-continue for short PUT requests&lt;/h3&gt;
+
+
+
+&lt;p&gt;Now aligns with and behaves more similarly to how curl has treated POST for a long time.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;http: fix unix domain socket use in https connects&lt;/h3&gt;
+
+
+
+&lt;p&gt;A regression.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;multi: make multi_perform ignore/unignore signals less often&lt;/h3&gt;
+
+
+
+&lt;p&gt;When iterating over a potentially long list of individual transfers to &amp;#8220;take care of&amp;#8221;, we can avoid many ignore + unignore sequences by retaining the previous state when possible.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;multi: remove PENDING + MSGSENT handles from the main linked list&lt;/h3&gt;
+
+
+
+&lt;p&gt;To speed up the handling of large amounts of easy handles added to a multi handle that are either pending or already completed, those easy handles are now moved out of the main linked list to separate queues.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;rand: use arc4random as fallback when available&lt;/h3&gt;
+
+
+
+&lt;p&gt;Makes curl built without a TLS library get better random, assuming the platform supports it.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;urlapi: &amp;#8216;%&amp;#8217; is illegal in host names&lt;/h3&gt;
+
+
+
+&lt;p&gt;The URL parser would wrongly accept a stand-alone percent as part of a host name. It remains accepted for percent-encoded host names and as separator between an IPv6 address and a zone id.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;urlapi: parse IPv6 literals without ENABLE_IPV6&lt;/h3&gt;
+
+
+
+&lt;p&gt;To make the URL parser behavior more consistent, it can now parse and deal with IPv6 addresses perfectly fine and the same way even if IPv6 connectivity does not actually work.&lt;/p&gt;
+
+
+
+&lt;h3 class="wp-block-heading"&gt;binding to an interface with host name using c-ares&lt;/h3&gt;
+
+
+
+&lt;p&gt;Works again!&lt;/p&gt;
+</content:encoded>
+</item>
+<item>
+<title>twenty-five years of curl</title>
+<link>https://daniel.haxx.se/blog/2023/03/20/twenty-five-years-of-curl/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/20/twenty-five-years-of-curl/#comments</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Sun, 19 Mar 2023 23:05:15 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>birthday</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=21514</guid>
+<description>Time flies when you are having fun. Today is curl&amp;#8216;s 25th birthday. The curl project started out very humbly as a small renamed URL transfer tool that almost nobody knew about for the first few years. It scratched a personal itch of mine, Me back then I made that first curl release and I&amp;#8217;ve packaged &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/20/twenty-five-years-of-curl/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;twenty-five years of curl&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;Time flies when you are having fun. Today is &lt;a href="https://curl.se/"&gt;curl&lt;/a&gt;&amp;#8216;s 25th birthday.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/05/curl-symbol.png" alt="" class="wp-image-8943" width="359" height="313" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/05/curl-symbol.png 789w, https://daniel.haxx.se/blog/wp-content/uploads/2016/05/curl-symbol-200x175.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/05/curl-symbol-450x394.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2016/05/curl-symbol-768x672.png 768w" sizes="(max-width: 359px) 100vw, 359px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The curl project started out very humbly as a small renamed URL transfer tool that almost nobody knew about for the first few years. It scratched a personal itch of mine,&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Me back then&lt;/h2&gt;
+
+
+
+&lt;p&gt;I made that first curl release and I&amp;#8217;ve packaged every single release since. The day I did that first curl release I was 27 years old and I worked as a software engineer for &lt;strong&gt;Frontec Tekniksystem&lt;/strong&gt;, where I mostly did contract development on embedded systems for larger Swedish product development companies. For a few years in the late 90s I would for example do quite a few projects at and for the telecom giant Ericsson.&lt;/p&gt;
+
+
+
+&lt;p&gt;I have enjoyed programming and development ever since I got my first computer in the mid 80s. In the 1990s I had already established a daily schedule where I stayed up late when my better half went to bed at night, and I spent another hour or two on my spare time development.  This is basically how I have manged to find time to devote to my projects the first few decades. Less sleep. Less other things.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Gradually and always improving&lt;/h2&gt;
+
+
+
+&lt;p&gt;The concept behind curl development has always been to gradually and iteratively improve all aspects of it. Keep behavior, but enhance the code, add test cases, improve the documentation. Over and over, year after year. It never stops. As the timeline below helps showing.&lt;/p&gt;
+
+
+
+&lt;p&gt;Similarly, there was no sudden specific moment when suddenly curl became popular and the number of users skyrocketed. Instead, the number of users and the popularity of the tool and library has gradually and continuously grown.  In 1998 there were few users. By 2010 there were hundreds of millions.&lt;/p&gt;
+
+
+
+&lt;p&gt;We really have no idea exactly how many users or installations of libcurl there are now. It is easy to estimate that it runs in &lt;strong&gt;way more than ten billion installations&lt;/strong&gt; purely based on the fact that there are 7 billion smart phones and 1 billion tablets in the world , and we know that each of them run at least one, but likely many more curl installs.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Before curl&lt;/h2&gt;
+
+
+
+&lt;p&gt;My internet transfer journey started in late 1996 when I downloaded &lt;em&gt;httpget&lt;/em&gt; 0.1 to automatically download currency rates daily to make my currency exchange converter work correctly for my IRC bot. httpget had some flaws so I sent back fixes, but Rafael, the author, quickly decided I could rather take over maintenance of the thing. So I did.&lt;/p&gt;
+
+
+
+&lt;p&gt;I added support for GOPHER, change named of the project, added FTP support and then in early 1998 I started adding FTP upload support as well&amp;#8230;&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;1998&lt;/h2&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/old-logo2.jpg" alt="" class="wp-image-8822" width="245" height="67" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/old-logo2.jpg 420w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/old-logo2-200x55.jpg 200w" sizes="(max-width: 245px) 100vw, 245px" /&gt;&lt;figcaption class="wp-element-caption"&gt;The original curl logo.&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;On March 20 1998, curl 4.0 was released and it was already 2,200 lines of code on its birthday because it was built on the projects previously named httpget and urlget. It then supported three protocols: HTTP, GOPHER and FTP and featured 24 glorious command line options.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first release of curl was not that special event since I had been shipping httpget and urlget releases for over a year already, so while this was a new name it was also &amp;#8220;just another release&amp;#8221; as I had done many times already.&lt;/p&gt;
+
+
+
+&lt;p&gt;We would add HTTPS and TELNET support already the first curl year, which also introduced the first ever curl man page. curl started out GPL licensed but I switched to MPL already within that first calendar year 1998.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first SSL support was powered by SSLeay. The project that in late 1998 would transition over into becoming OpenSSL.&lt;/p&gt;
+
+
+
+&lt;p&gt;In August 1998, we added curl on the open source directory site freshmeat.net.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first curl web page was published at &lt;code&gt;http://www.fts.frontec.se/~dast&lt;/code&gt;. (the oldest version archived by the wayback machine is &lt;a href="https://web.archive.org/web/19981202234521/http://www.fts.frontec.se:80/~dast/curl/"&gt;from December 1998&lt;/a&gt;)&lt;/p&gt;
+
+
+
+&lt;p&gt;In November 1998 I added a note to the website about the mind-blowing success as the latest release had been downloaded &lt;strong&gt;300 times&lt;/strong&gt;! Success and popularity were far from instant.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;img decoding="async" loading="lazy" width="984" height="161" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/massive-popularity.png" alt="" class="wp-image-22208"/&gt;&lt;figcaption class="wp-element-caption"&gt;Screenshot from the curl website of November 1998&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;During this first year, we shipped 20 curl releases. We have never repeated that feat again.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;1999&lt;/h2&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/Debian_logo.png" alt="" class="wp-image-21956" width="162" height="213"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We created the first configure script, added support for cookies and appeared as a package in Debian Linux.&lt;/p&gt;
+
+
+
+&lt;p&gt;The curl website moved to &lt;code&gt;http://curl.haxx.nu&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for DICT, LDAP and FILE through the year. Now supporting 8 protocols.&lt;/p&gt;
+
+
+
+&lt;p&gt;In the last days of 1999 we imported the curl code to the cool new service called Sourceforge. All further commit counts in curl starts with this import. December 29, 1999.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2000&lt;/h2&gt;
+
+
+
+&lt;p&gt;Privately, I switched jobs early 2000 but continued doing embedded contract development during my days.&lt;/p&gt;
+
+
+
+&lt;p&gt;The rules for the TLD .se changed and we moved the curl website to &lt;code&gt;&lt;a href="http://curl.haxx.se"&gt;curl.haxx.se&lt;/a&gt;&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;I got married.&lt;/p&gt;
+
+
+
+&lt;p&gt;In August 2000, we shipped curl 7.1 and things changed. This release introduced the library we decided to call libcurl because we couldn&amp;#8217;t come up with a better name. At this point the project were at 17,200 lines of code.&lt;/p&gt;
+
+
+
+&lt;p&gt;The libcurl API was inspired by how &lt;code&gt;fopen()&lt;/code&gt; works and returns just an opaque handle, and how &lt;code&gt;ioctl() &lt;/code&gt; can be used to set options.&lt;/p&gt;
+
+
+
+&lt;p&gt;Creating a library out of curl was an idea I had almost from the beginning, as I&amp;#8217;ve already before that point realized the power a good library can bring to applications.&lt;/p&gt;
+
+
+
+&lt;p&gt;The &lt;a href="https://curl.se/docs/CVE-2000-0973.html"&gt;first CVE for curl&lt;/a&gt; was reported.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full is-resized"&gt;&lt;a href="https://php.net/"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/PHP-logo.png" alt="" class="wp-image-21647" width="133" height="72"/&gt;&lt;/a&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Users found the library useful and increased  the curl uptake. One of the first early adopters of libcurl was the PHP language, which decided to use libcurl as their default HTTP/URL transfer engine.&lt;/p&gt;
+
+
+
+&lt;p&gt;We created the first test suite.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2001&lt;/h2&gt;
+
+
+
+&lt;p&gt;We changed the license and offered curl under the new curl license (effectively MIT) as well as MPL. The idea to slightly modify the curl license was a crazy one, but the reason for that has been forgotten.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for HTTP/1.1 and IPv6.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/apple-2001.png" alt="" class="wp-image-21726" width="152" height="189"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In June, the THANKS file counted 67 named contributors. This is a team effort. We surpassed 1,100 total commits in  March and in July curl was 20,000 lines of code.&lt;/p&gt;
+
+
+
+&lt;p&gt;Apple started bundling curl with Mac OS X when curl 7.7.2 shipped in Mac OS X 10.1.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2002&lt;/h2&gt;
+
+
+
+&lt;p&gt;The test suite contained 79 test cases.&lt;/p&gt;
+
+
+
+&lt;p&gt;We dropped the MPL option. We would never again play the license change game.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for &lt;a href="https://zlib.net/"&gt;gzip compression&lt;/a&gt; over HTTP and learned how to use SOCKS proxies.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2003&lt;/h2&gt;
+
+
+
+&lt;p&gt;The curl &amp;#8220;autobuild&amp;#8221; system was introduced: volunteers run scripts on their machines that download, build and run the curl tests frequently and email back the results to our central server for reporting and analyses. Long before modern CI systems made these things so much easier.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for Digest, NTLM and Negotiate authentication for HTTP.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/curl-refined.jpg" alt="" class="wp-image-8823" width="396" height="147" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/curl-refined.jpg 471w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/curl-refined-200x74.jpg 200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/curl-refined-450x167.jpg 450w" sizes="(max-width: 396px) 100vw, 396px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In August we offered 40 individual man pages.&lt;/p&gt;
+
+
+
+&lt;p&gt;Support for FTPS was added, protocol number 9.&lt;/p&gt;
+
+
+
+&lt;p&gt;My first child, Agnes, was born.&lt;/p&gt;
+
+
+
+&lt;p&gt;I forked the ares project and started the &lt;a href="https://c-ares.org/"&gt;c-ares project&lt;/a&gt; to provide and maintain a library for doing asynchronous name  resolves &amp;#8211; for curl and others. This project has since then also become fairly popular and widely used.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2004&lt;/h2&gt;
+
+
+
+&lt;p&gt;At the beginning of 2003, curl was 32,700 lines of code.&lt;/p&gt;
+
+
+
+&lt;p&gt;We made curl support &amp;#8220;large files&amp;#8221;, which back then meant supporting files larger than 2 and 4 gigabytes.&lt;/p&gt;
+
+
+
+&lt;p&gt;We implemented support for IDN, International Domain Names.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2005&lt;/h2&gt;
+
+
+
+&lt;p&gt;GnuTLS become the second supported TLS library. Users could now select which TLS library they wanted their build to use.&lt;/p&gt;
+
+
+
+&lt;p&gt;Thanks to a grant from the Swedish &amp;#8220;Internetfonden&amp;#8221;, I took a leave of absence from work and could implement the first version of the &lt;a href="https://everything.curl.dev/libcurl/drive/multi-socket"&gt;multi_socket() API&lt;/a&gt; to allow applications to do more parallel transfers faster.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/git-logo.png" alt="" class="wp-image-21662" width="165" height="69"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;&lt;a href="https://git-scm.com/"&gt;git&lt;/a&gt; was created and they quickly adopted curl for their HTTP(S) transfers.&lt;/p&gt;
+
+
+
+&lt;p&gt;TFTP became the 10th protocol curl supports.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2006&lt;/h2&gt;
+
+
+
+&lt;p&gt;We decided to drop support for &amp;#8220;third party FTP transfers&amp;#8221; which made us bump the SONAME because of the modified ABI. The most recent such bump. It triggered some arguments. We learned how tough bumping the SONAME can be to users.&lt;/p&gt;
+
+
+
+&lt;p&gt;The &lt;a href="https://wolfssl.com/"&gt;wolfSSL&lt;/a&gt; precursor called cyassl became the third SSL library curl supported.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for HTTP/1.1 Pipelining and in the later half of the year I accepted a contract development work for Adobe and added support for SCP and SFTP.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;img decoding="async" loading="lazy" width="250" height="61" src="https://daniel.haxx.se/blog/wp-content/uploads/2009/03/logo1-250.jpg" alt="" class="wp-image-589" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2009/03/logo1-250.jpg 250w, https://daniel.haxx.se/blog/wp-content/uploads/2009/03/logo1-250-150x36.jpg 150w" sizes="(max-width: 250px) 100vw, 250px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;As part of the SCP and SFTP work, I took a rather big step into and would later become maintainer of the &lt;a href="https://libssh2.org/"&gt;libssh2&lt;/a&gt; project. This project is also pretty widely used.&lt;/p&gt;
+
+
+
+&lt;p&gt;I had a second child, my son Rex.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2007&lt;/h2&gt;
+
+
+
+&lt;p&gt;Now at 51,500 lines of code we added support for a fourth SSL library: NSS&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for LDAPS and the first port to OS/400 was merged.&lt;/p&gt;
+
+
+
+&lt;p&gt;For curl 7.16.1 we added support for &lt;code&gt;&lt;a href="https://everything.curl.dev/libcurl/libcurl"&gt;--libcurl&lt;/a&gt;&lt;/code&gt;. Possibly my single favorite curl command line option. Generate libcurl-using source code repeating the command line transfer.&lt;/p&gt;
+
+
+
+&lt;p&gt;In April, curl had 348 test cases.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2008&lt;/h2&gt;
+
+
+
+&lt;p&gt;By now the command line tool had grown to feature 126 command line options. A 5x growth during curl&amp;#8217;s ten first years.&lt;/p&gt;
+
+
+
+&lt;p&gt;In March we surpassed 10,000 commits.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2009/08/ietf-logo_550x331.gif" alt="" class="wp-image-1013" width="292" height="176" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2009/08/ietf-logo_550x331.gif 550w, https://daniel.haxx.se/blog/wp-content/uploads/2009/08/ietf-logo_550x331-150x90.gif 150w, https://daniel.haxx.se/blog/wp-content/uploads/2009/08/ietf-logo_550x331-300x180.gif 300w" sizes="(max-width: 292px) 100vw, 292px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I joined the &lt;a href="https://lists.w3.org/Archives/Public/ietf-http-wg/"&gt;httpbis working group mailing list&lt;/a&gt; and started slowly to actively participate within the IETF and the work on the HTTP protocol.&lt;/p&gt;
+
+
+
+&lt;p&gt;Solaris ships curl and libcurl. The Adobe flash player on Linux uses libcurl.&lt;/p&gt;
+
+
+
+&lt;p&gt;In September the total count of curl contributors reached 654.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2009&lt;/h2&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/240px-Cmake.png" alt="" class="wp-image-21660" width="127" height="127"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;On &lt;a href="https://twit.tv/shows/floss-weekly/episodes/51"&gt;FLOSS Weekly 51&lt;/a&gt;, I talked about curl on a &lt;a href="https://daniel.haxx.se/podcasts.html"&gt;podcast&lt;/a&gt; for the first time.&lt;/p&gt;
+
+
+
+&lt;p&gt;We introduced support for building curl with &lt;a href="https://cmake.org/"&gt;cmake&lt;/a&gt;. A decision that is still being discussed and questioned if it actually helps us. To make the loop complete, cmake itself uses libcurl.&lt;/p&gt;
+
+
+
+&lt;p&gt;In July &lt;a href="https://www.ietf.org/proceedings/75/"&gt;the IETF 75 meeting&lt;/a&gt; was held in Stockholm, my home town, and this was the first time I got to physically meet several of my personal protocol heroes that created and kept working on the HTTP protocol: Mark, Roy, Larry, Julian etc.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010.png" alt="" class="wp-image-10734" width="238" height="80" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010.png 1046w, https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010-200x68.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010-450x152.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010-768x260.png 768w, https://daniel.haxx.se/blog/wp-content/uploads/2018/01/Haxx_logo_2010-1038x354.png 1038w" sizes="(max-width: 238px) 100vw, 238px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In August, I quit my job &lt;a href="https://daniel.haxx.se/blog/2009/08/30/going-full-time-haxx/"&gt;to work for my own&lt;/a&gt; company Haxx, but still doing contracted development. Mostly doing embedded Linux by then.&lt;/p&gt;
+
+
+
+&lt;p&gt;Thanks to yet another contract, I introduced support for IMAP(S), SMTP(S) and POP3(S) to curl, bumping the number of supported protocols to 19.&lt;/p&gt;
+
+
+
+&lt;p&gt;I was &lt;a href="https://daniel.haxx.se/blog/2009/11/14/i-won-it-you-guys-are-the-best/"&gt;awarded the Nordic Free Software Award 2009&lt;/a&gt;. For my work on curl, c-ares and libssh2.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2010&lt;/h2&gt;
+
+
+
+&lt;p&gt;We added support for RTSP, and RTMP(S).&lt;/p&gt;
+
+
+
+&lt;p&gt;PolarSSL became the 6th supported SSL library.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2013/02/github-social-coding.png" alt="" class="wp-image-4825" width="114" height="171" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2013/02/github-social-coding.png 300w, https://daniel.haxx.se/blog/wp-content/uploads/2013/02/github-social-coding-100x150.png 100w, https://daniel.haxx.se/blog/wp-content/uploads/2013/02/github-social-coding-200x300.png 200w" sizes="(max-width: 114px) 100vw, 114px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We switched version control system from CVS to git and at the same time we switched hosting from Sourceforge to &lt;a href="https://github.com/"&gt;GitHub&lt;/a&gt;. From this point on we track authorship of commits correctly and appropriately, something that was much harder to do with CVS.&lt;/p&gt;
+
+
+
+&lt;p&gt;Added support for the AxTLS library. The 7th.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2011&lt;/h2&gt;
+
+
+
+&lt;p&gt;Over 80,000 lines of code.&lt;/p&gt;
+
+
+
+&lt;p&gt;The &lt;a href="https://daniel.haxx.se/blog/2011/04/28/the-cookie-rfc-6265/" data-type="post" data-id="2319"&gt;cookie RFC 6265 shipped&lt;/a&gt;. I was there and did some minor contributions for it.&lt;/p&gt;
+
+
+
+&lt;p&gt;We introduced the &lt;code&gt;&lt;a href="https://github.com/curl/curl/blob/master/docs/CHECKSRC.md"&gt;checksrc&lt;/a&gt;&lt;/code&gt; script that verifies that source code adheres to the curl code style. Started out simple, has improved and been made stricter over time.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full"&gt;&lt;img decoding="async" loading="lazy" width="150" height="58" src="https://daniel.haxx.se/blog/wp-content/uploads/2007/09/google_150x58.gif" alt="" class="wp-image-70"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I got a &lt;a href="https://daniel.haxx.se/blog/2011/12/06/a-special-thank-you-from-google/" data-type="post" data-id="3424"&gt;thank you from Googlers&lt;/a&gt; which eventually landed me some Google swag.&lt;/p&gt;
+
+
+
+&lt;p&gt;We surpassed 100 individual committers.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2012&lt;/h2&gt;
+
+
+
+&lt;p&gt;149 command line options.&lt;/p&gt;
+
+
+
+&lt;p&gt;Added support for Schannel and Secure Transport for TLS.&lt;/p&gt;
+
+
+
+&lt;p&gt;When I did an attempt at a vanity count of number of curl users, I ended up estimating they were &lt;a href="https://daniel.haxx.se/blog/2012/05/16/300m-users/" data-type="post" data-id="3749"&gt;550 million&lt;/a&gt;. This was one of the earlier realizations of mine that &lt;em&gt;man, curl is everywhere!&lt;/em&gt;&lt;/p&gt;
+
+
+
+&lt;p&gt;During the entire year of 2012, there were 67 commit authors.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2013&lt;/h2&gt;
+
+
+
+&lt;p&gt;Added support for GSKit, a TLS library mostly used on OS/400. The 10th supported TLS library.&lt;/p&gt;
+
+
+
+&lt;p&gt;In April the number of contributors had surpassed 1,000 and we reached over 800 test cases.&lt;/p&gt;
+
+
+
+&lt;p&gt;We refactored the internals to make sure everything is done non-blocking and what we call &amp;#8220;use multi internally&amp;#8221; so that the easy interface is just a wrapper for a multi transfer.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo.png" alt="" class="wp-image-6917" width="126" height="126" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo.png 400w, https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo-150x150.png 150w, https://daniel.haxx.se/blog/wp-content/uploads/2015/01/http2-logo-300x300.png 300w" sizes="(max-width: 126px) 100vw, 126px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The initial attempts at HTTP/2 support were merged (powered by the great &lt;a href="https://nghttp2.org/"&gt;nghttp2&lt;/a&gt; library) as well as support for doing connects using the Happy Eyeballs approach.&lt;/p&gt;
+
+
+
+&lt;p&gt;We created our first two CI jobs.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2014&lt;/h2&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash-1200x340.png" alt="" class="wp-image-11794" width="386" height="109" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash-1200x340.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash-200x57.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash-450x128.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash-768x218.png 768w, https://daniel.haxx.se/blog/wp-content/uploads/2018/11/mozilla-colon-slashlash.png 1470w" sizes="(max-width: 386px) 100vw, 386px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I  &lt;a href="https://daniel.haxx.se/blog/2014/01/13/this-is-my-first-day-at-mozilla/" data-type="post" data-id="5377"&gt;started working for Mozilla&lt;/a&gt; in the Firefox networking team, remotely from my house in Sweden. For the first time in my career, I would actually work primarily with networking and HTTP etc with a significant overlap with what curl is and does. Up until this point, the two sides of my life had been strangely separated. Mozilla allowed me to spend some work hours on curl.&lt;/p&gt;
+
+
+
+&lt;p&gt;At 161 command line options and 20 reported CVEs.&lt;/p&gt;
+
+
+
+&lt;p&gt;59 man pages exploded into 270 man pages in July when every libcurl option got its own separate page.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for the &lt;a href="https://www.libressl.org/"&gt;libressl&lt;/a&gt; OpenSSL fork and removed support for QsoSSL. Still at 10 supported TLS libraries.&lt;/p&gt;
+
+
+
+&lt;p&gt;In September, there was 105,000 lines of code.&lt;/p&gt;
+
+
+
+&lt;p&gt;Added support for SMB(S). 24 protocols.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2015&lt;/h2&gt;
+
+
+
+&lt;p&gt;Added support for BoringSSL and mbedTLS.&lt;/p&gt;
+
+
+
+&lt;p&gt;We introduced support for doing proper multiplexed transfers using HTTP/2. A pretty drastic paradigm change in the architecture when suddenly multiple transfers would share a single connection. Lots of refactors and it took a while until HTTP/2 support got stable.&lt;/p&gt;
+
+
+
+&lt;p&gt;It followed by our first support for HTTP/2 server push.&lt;/p&gt;
+
+
+
+&lt;p&gt;We switched over to the GitHub working model completely, using its issue tracker and doing  pull-requests.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first &lt;a href="https://daniel.haxx.se/blog/2015/05/15/rfc-7540-is-http2/" data-type="post" data-id="7069"&gt;HTTP/2 RFC was published in May&lt;/a&gt;. I like to think I contributed a little bit to the working group effort behind it.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/netflix-logo.png" alt="" class="wp-image-21743" width="183" height="50"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;My HTTP/2 work this year was in part sponsored by Netflix and it was a dance to make that happen while still employed by and working for Mozilla.&lt;/p&gt;
+
+
+
+&lt;p&gt;20,000 commits.&lt;/p&gt;
+
+
+
+&lt;p&gt;I started writing &lt;a href="https://everything.curl.dev/"&gt;everything curl&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;We also added support for &lt;a href="https://github.com/rockdaboot/libpsl"&gt;libpsl&lt;/a&gt;, using the &lt;a href="https://publicsuffix.org/"&gt;Public Suffix List&lt;/a&gt; for better cookie handling.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2016&lt;/h2&gt;
+
+
+
+&lt;p&gt;curl switched to using HTTP/2 by default for HTTPS transfers.&lt;/p&gt;
+
+
+
+&lt;p&gt;In May, curl feature 185 command line options.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-1200x459.png" alt="" class="wp-image-8936" width="353" height="134" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-1200x459.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-200x76.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-450x172.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2016/04/good_curl_logo-768x294.png 768w" sizes="(max-width: 353px) 100vw, 353px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We got a &lt;a href="https://daniel.haxx.se/blog/2016/05/27/a-new-curl-logo/" data-type="post" data-id="8817"&gt;new logo&lt;/a&gt;, the present one. Designed by Adrian Burcea at Soft Dreams.&lt;/p&gt;
+
+
+
+&lt;p&gt;Added support for HTTPS proxies and TLS 1.3.&lt;/p&gt;
+
+
+
+&lt;p&gt;curl was &lt;a href="https://daniel.haxx.se/blog/2016/11/23/curl-security-audit/" data-type="post" data-id="9346"&gt;audited by Cure 53&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;A Swedish tech site named me &lt;a href="https://daniel.haxx.se/blog/2016/12/01/2nd-best-in-sweden/" data-type="post" data-id="9463"&gt;2nd best developer in Sweden&lt;/a&gt;. Because of my work on curl.&lt;/p&gt;
+
+
+
+&lt;p&gt;At 115,500 lines of code at the end of the year.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2017&lt;/h2&gt;
+
+
+
+&lt;p&gt;curl got support for building with and using multiple TLS libraries and doing the choice of which to use at start-up.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2017/04/fastly-logo-1200x630.png" alt="" class="wp-image-9959" width="138" height="72" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2017/04/fastly-logo.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2017/04/fastly-logo-200x105.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2017/04/fastly-logo-450x236.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2017/04/fastly-logo-768x403.png 768w" sizes="(max-width: 138px) 100vw, 138px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Fastly reached out and graciously and generously &lt;a href="https://daniel.haxx.se/blog/2017/05/02/a-curl-delivery-network/" data-type="post" data-id="9941"&gt;started hosting&lt;/a&gt; the curl website as well as my personal website. This help putting the end to previous instabilities when blog posts got too popular for my site to hold up and it made the curl site snappier for more people around the globe. They have remained faithful sponsors of the project ever since.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2017/03/2.1-Final-1200x739.png" alt="" class="wp-image-9853" width="355" height="216"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In the spring of 2017, we had our first ever physical developers conference, &lt;a href="https://github.com/curl/curl-up/wiki"&gt;curl up&lt;/a&gt;, as twenty something curl fans and developers &lt;a href="https://daniel.haxx.se/blog/2017/03/20/curlup-2017-curl-now/" data-type="post" data-id="9852"&gt;went to Nuremberg&lt;/a&gt;, Germany to spend a weekend doing nothing but curl stuff.&lt;/p&gt;
+
+
+
+&lt;p&gt;In June I was &lt;a href="https://daniel.haxx.se/blog/2017/06/28/denied-entry/"&gt;denied traveling to the US&lt;/a&gt;. This would subsequently take me on a prolonged and painful adventure trying to get a US visa.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first &lt;a href="https://everything.curl.dev/usingcurl/tls/sslkeylogfile#sslkeylogfile"&gt;SSLKEYLOGFILE&lt;/a&gt; support landed, we introduced the new MIME API and support for brotli compression.&lt;/p&gt;
+
+
+
+&lt;p&gt;The curl project was adopted into the &lt;a href="https://google.github.io/oss-fuzz/"&gt;OSS-Fuzz project&lt;/a&gt;, which immediately started to point out mistakes in our code. They have kept fuzzing curl nonstop since then.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2017/09/polhemsmedalj.jpg" alt="" class="wp-image-10408" width="179" height="179" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2017/09/polhemsmedalj.jpg 824w, https://daniel.haxx.se/blog/wp-content/uploads/2017/09/polhemsmedalj-200x200.jpg 200w, https://daniel.haxx.se/blog/wp-content/uploads/2017/09/polhemsmedalj-450x450.jpg 450w, https://daniel.haxx.se/blog/wp-content/uploads/2017/09/polhemsmedalj-768x768.jpg 768w" sizes="(max-width: 179px) 100vw, 179px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;In October, I was &lt;a href="https://daniel.haxx.se/blog/2017/10/20/my-night-at-the-museum/" data-type="post" data-id="10523"&gt;awarded the Polhem Prize&lt;/a&gt;. Sweden&amp;#8217;s oldest and probably most prestigious engineering award. This prize was established and has been awarded since 1876. A genuine gold medal, handed over to me by no other than his majesty the king of Sweden. The medal even has my name engraved.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2018&lt;/h2&gt;
+
+
+
+&lt;p&gt;Added support for DNS over HTTPS and the new URL API was introduced to allow applications to parse URLs the exact same way curl does it.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2018/09/Windows-10-logo-300x300.png" alt="" class="wp-image-11600" width="117" height="117" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2018/09/Windows-10-logo-300x300.png 300w, https://daniel.haxx.se/blog/wp-content/uploads/2018/09/Windows-10-logo-300x300-200x200.png 200w" sizes="(max-width: 117px) 100vw, 117px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I joined the &lt;a href="https://changelog.com/podcast/299"&gt;Changelog podcast and talked about curl&lt;/a&gt; turning 20.&lt;/p&gt;
+
+
+
+&lt;p&gt;Microsoft started shipping curl bundled with Windows. But &lt;a href="https://daniel.haxx.se/blog/2016/08/19/removing-the-powershell-curl-alias/" data-type="post" data-id="9229"&gt;the curl alias remains&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;We introduced support for a second SSH library, so now SCP and SFTP could be powered by &lt;a href="https://libssh.org"&gt;libssh&lt;/a&gt; in addition to the already supported &lt;a href="https://libssh2.org/"&gt;libssh2&lt;/a&gt; library.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for MesaLink but dropped support for AxTLS. At 12 TLS libraries.&lt;/p&gt;
+
+
+
+&lt;p&gt;129,000 lines of code. Reached 10,000 stars on GitHub.&lt;/p&gt;
+
+
+
+&lt;p&gt;To accept a donation it was requested we create an account with &lt;a href="https://opencollective.com/curl"&gt;Open Collective&lt;/a&gt;, and so we did. It has since been a good channel for the project to receive donations and sponsorships.&lt;/p&gt;
+
+
+
+&lt;p&gt;In November 2018 it was decided that the HTTP-over-QUIC protocol should officially become HTTP/3.&lt;/p&gt;
+
+
+
+&lt;p&gt;At 27 CI jobs at the end of the year. Running over 1200 test cases.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2019&lt;/h2&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2019/01/wolfssl-logo.png" alt="" class="wp-image-11938" width="99" height="76" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2019/01/wolfssl-logo.png 1011w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/wolfssl-logo-200x155.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/wolfssl-logo-450x348.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/wolfssl-logo-768x594.png 768w" sizes="(max-width: 99px) 100vw, 99px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;I &lt;a href="https://daniel.haxx.se/blog/2019/02/02/im-on-team-wolfssl/" data-type="post" data-id="11915"&gt;started working for wolfSSL&lt;/a&gt;, doing curl full-time. It just took 21 years to make curl my job.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added support for Alt-Svc and we removed support for the always so &lt;a href="https://daniel.haxx.se/blog/2019/04/06/curl-says-bye-bye-to-pipelining/" data-type="post" data-id="12074"&gt;problematic HTTP/1.1 Pipelining&lt;/a&gt;.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray-1200x271.png" alt="" class="wp-image-11929" width="252" height="57" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray-1200x271.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray-200x45.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray-450x102.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray-768x173.png 768w, https://daniel.haxx.se/blog/wp-content/uploads/2019/01/hackerone_logo_gray.png 1948w" sizes="(max-width: 252px) 100vw, 252px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We introduced our first curl &lt;a href="https://curl.se/docs/bugbounty.html"&gt;bug bounty&lt;/a&gt; program and we have effectively had a bug bounty running since. In association with &lt;a href="https://hackerone.com/curl"&gt;hackerone&lt;/a&gt;. We have paid almost 50,000 USD in reward money for 45 vulnerabilities (up to Feb 2023).&lt;/p&gt;
+
+
+
+&lt;p&gt;Added support for &lt;a href="https://github.com/jens-maus/amissl"&gt;AmiSSL&lt;/a&gt; and &lt;a href="https://bearssl.org/"&gt;BearSSL&lt;/a&gt;: at 14 libraries.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-large is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x-1200x521.png" alt="" class="wp-image-14407" width="137" height="60" srcset="https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x-1200x521.png 1200w, https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x-450x196.png 450w, https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x-200x87.png 200w, https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x-768x334.png 768w, https://daniel.haxx.se/blog/wp-content/uploads/2020/08/IETF-Badge-HTTP3@3x.png 1383w" sizes="(max-width: 137px) 100vw, 137px" /&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;We merged &lt;a href="https://daniel.haxx.se/blog/2019/08/05/first-http-3-with-curl/"&gt;initial support for HTTP/3&lt;/a&gt;, powered by the &lt;a href="https://docs.quic.tech/quiche/"&gt;quiche&lt;/a&gt; library, and a little later also with a second library: &lt;a href="https://github.com/ngtcp2/ngtcp2"&gt;ngtcp2&lt;/a&gt;. Because why not do many backends?&lt;/p&gt;
+
+
+
+&lt;p&gt;We started offering curl in an &amp;#8220;official&amp;#8221; &lt;a href="https://hub.docker.com/r/curlimages/curl"&gt;docker image&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2020&lt;/h2&gt;
+
+
+
+&lt;p&gt;The curl tool got parallel transfer powers, the ability to output data in JSON format with &lt;code&gt;-w&lt;/code&gt; and the scary &lt;code&gt;--help&lt;/code&gt; output was cleaned up and arranged better into subcategories.&lt;/p&gt;
+
+
+
+&lt;p&gt;In March, for &lt;a href="https://youtu.be/X7Jlv87Nb8Y"&gt;curl 7.69.0&lt;/a&gt;, I started doing release video presentations, live-streamed.&lt;/p&gt;
+
+
+
+&lt;p&gt;The &lt;a href="https://curl.se/"&gt;curl website&lt;/a&gt; moved to &lt;code&gt;curl.se&lt;/code&gt; and &lt;a href="https://everything.curl.dev/"&gt;everything curl&lt;/a&gt; moved over to the &lt;code&gt;curl.dev&lt;/code&gt; domain.&lt;/p&gt;
+
+
+
+&lt;p&gt;MQTT become the 25th supported protocol.&lt;/p&gt;
+
+
+
+&lt;p&gt;The first support for HSTS was added, as well as support for zstd compression.&lt;/p&gt;
+
+
+
+&lt;p&gt;&lt;a href="https://www.wolfssl.com/products/wolfssh/"&gt;wolfSSH&lt;/a&gt; became the third supported SSH library.&lt;/p&gt;
+
+
+
+&lt;p&gt;We removed support for PolarSSL.&lt;/p&gt;
+
+
+
+&lt;p&gt;Initial &lt;a href="https://daniel.haxx.se/blog/2020/10/09/rust-in-curl-with-hyper/" data-type="post" data-id="14663"&gt;support for hyper&lt;/a&gt; as an alternative backend for HTTP/1 and HTTP/2.&lt;/p&gt;
+
+
+
+&lt;p&gt;In November, in the middle of Covid, I &lt;a href="https://daniel.haxx.se/blog/2020/11/09/a-us-visa-in-937-days/" data-type="post" data-id="14870"&gt;finally got a US visa&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;The 90th CI job was created just before the end of the year.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2021&lt;/h2&gt;
+
+
+
+&lt;p&gt;Dropped support for MesaLink but added support for rustls. At  13 TLS libraries.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/MarsHelicopterIngenuity.png" alt="" class="wp-image-21678" width="207" height="132"/&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Ingenuity landed on Mars, and &lt;a href="https://daniel.haxx.se/blog/2021/04/19/mars-2020-helicopter-contributor/" data-type="post" data-id="16427"&gt;curl helped it happen&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;Received a very unpleasant &lt;a href="https://un.curl.dev/emails/slaughter"&gt;death threat over email&lt;/a&gt; from someone deeply confused, blaming me for all sorts of bad things that happened to him.&lt;/p&gt;
+
+
+
+&lt;p&gt;Reached 20,000 stars on GitHub.&lt;/p&gt;
+
+
+
+&lt;p&gt;Supports GOPHERS. 26 protocols.&lt;/p&gt;
+
+
+
+&lt;p&gt;187 individuals authored commits that were merged during the year.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2022&lt;/h2&gt;
+
+
+
+&lt;p&gt;Merged initial support WebSocket (&lt;code&gt;WS://&lt;/code&gt; and &lt;code&gt;WSS:// &lt;/code&gt;URLs) and a new API for handling it. At 28 protocols.&lt;/p&gt;
+
+
+
+&lt;p&gt;We added the &lt;code&gt;&lt;a href="https://daniel.haxx.se/blog/2022/02/02/curl-dash-dash-json/" data-type="post" data-id="18389"&gt;--json&lt;/a&gt;&lt;/code&gt; command line option and libcurl got a new &lt;a href="https://daniel.haxx.se/blog/2022/03/22/a-headers-api-for-libcurl/" data-type="post" data-id="18644"&gt;header API&lt;/a&gt;, which then also made the command line tool get new &lt;a href="https://daniel.haxx.se/blog/2022/03/24/easier-header-picking-with-curl/" data-type="post" data-id="18726"&gt;&amp;#8220;header picking&amp;#8221; ability&lt;/a&gt; added to &lt;code&gt;-w&lt;/code&gt;. We also added &lt;code&gt;&lt;a href="https://daniel.haxx.se/blog/2022/05/23/curl-offers-repeated-transfers-at-slower-pace/" data-type="post" data-id="18925"&gt;--rate&lt;/a&gt;&lt;/code&gt; and &lt;code&gt;&lt;a href="https://daniel.haxx.se/blog/2022/11/10/append-data-to-the-url-query/" data-type="post" data-id="20533"&gt;--url-query&lt;/a&gt;&lt;/code&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;The &lt;a href="https://datatracker.ietf.org/doc/html/rfc9114"&gt;HTTP/3 RFC&lt;/a&gt; was published in June.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignleft size-full is-resized"&gt;&lt;a href="https://openssf.org/"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/openssf.png" alt="" class="wp-image-21737" width="149" height="221"/&gt;&lt;/a&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;&lt;a href="https://github.com/nibanks/msh3"&gt;msh3&lt;/a&gt; become the third supported HTTP/3 library.&lt;/p&gt;
+
+
+
+&lt;p&gt;Trail of Bits did a &lt;a href="https://daniel.haxx.se/blog/2022/12/21/the-2022-curl-security-audit/" data-type="post" data-id="19480"&gt;curl security audit&lt;/a&gt;, sponsored by &lt;a href="https://openssf.org/"&gt;OpenSSF&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;The 212th curl release was done in December. Issue &lt;strong&gt;10,000&lt;/strong&gt; was created on GitHub.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;2023&lt;/h2&gt;
+
+
+
+&lt;p&gt;At the start of the year: 155,100 lines of code. 486 man pages. 1560 test cases. 2,771 contributors. 1,105 commit authors. 132 CVEs. 122 CI jobs. 29,733 commits. 48,580 USD rewarded in bug-bounties. 249 command line options. 28 protocols.  13 TLS libraries. 3 SSH libraries. 3 HTTP/3 libraries.&lt;/p&gt;
+
+
+
+&lt;p&gt;Introduce support for HTTP/3 with fall-back to older versions, making it less error-prone to use it.&lt;/p&gt;
+
+
+
+&lt;p&gt;On March 13 we surpassed &lt;strong&gt;30,000&lt;/strong&gt; commits.&lt;/p&gt;
+
+
+
+&lt;p&gt;On March 20, we release curl 8.0.0. Exactly 25 years since the first curl release.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Staying relevant&lt;/h2&gt;
+
+
+
+&lt;p&gt;Over the last 25 years we have all stopped using and forgotten lots of software, tools and services. Things come and go. Everything has its time and lots of projects simply do not keep up and gets replaced by something else at some point.&lt;/p&gt;
+
+
+
+&lt;p&gt;I like to think that curl is still a highly relevant software project with lots of users and use cases. I want to think that this is partly because we maintain it intensely and with both care and love. We make it do what users want it to do. Keep up, keep current, run the latest versions, support the latest security measures, be the project you would like to use and participate. Lead by example.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;My life is forever curl tinted&lt;/h2&gt;
+
+
+
+&lt;p&gt;Taking curl this far and being able to work full time on my hobby project is a  dream come real. curl is a huge part of my life.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full is-resized"&gt;&lt;a href="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/daniel-curl-back.jpg"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/02/daniel-curl-back.jpg" alt="" class="wp-image-21714" width="302" height="403"/&gt;&lt;/a&gt;&lt;figcaption class="wp-element-caption"&gt;Me, on vacation in Portugal in 2019.&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This said, curl is a team effort and it would never have taken off or become anything real without all our awesome contributors. People will call me &amp;#8220;the curl guy&amp;#8221; and some will say that it is &amp;#8220;my&amp;#8221; project, but everyone who has ever been close to the project knows that we are many more in the team than just me.&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;25 years&lt;/h2&gt;
+
+
+
+&lt;p&gt;That day found httpget I was 26 years old. I was 27 by the time I shipped curl. I turned 52 last November.&lt;/p&gt;
+
+
+
+&lt;p&gt;I&amp;#8217;ve worked on curl longer than I&amp;#8217;ve worked for any company. None of my kids are this old. 25 years ago I did not live in my house yet. 25 years ago Google didn&amp;#8217;t exist and neither did Firefox.&lt;/p&gt;
+
+
+
+&lt;p&gt;Many current curl users  were not even born when I started working on it.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="aligncenter size-full"&gt;&lt;a href="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/curl-1998-20232.jpg"&gt;&lt;img decoding="async" loading="lazy" width="1920" height="1080" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/curl-1998-20232.jpg" alt="" class="wp-image-22148"/&gt;&lt;/a&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;h2 class="wp-block-heading"&gt;Beyond twenty-five&lt;/h2&gt;
+
+
+
+&lt;p&gt;I feel obligated to add this section because people will ask.&lt;/p&gt;
+
+
+
+&lt;p&gt;I don&amp;#8217;t know what the future holds. I was never good at predictions or forecasts and frankly I always try to avoid reading tea leaves. I hope to stay active in the project and to continue working with client-side internet transfers for as long as it is fun and people want to use the results of my work.&lt;/p&gt;
+
+
+
+&lt;p&gt;Will I be around in the project in another 25 years? Will curl still be relevant then? I don&amp;#8217;t know. Let&amp;#8217;s find out!&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/20/twenty-five-years-of-curl/feed/</wfw:commentRss>
+<slash:comments>11</slash:comments>
+</item>
+<item>
+<title>Fossified: curl 25 years</title>
+<link>https://daniel.haxx.se/blog/2023/03/19/fossified-curl-25-years/</link>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Sun, 19 Mar 2023 15:49:59 +0000</pubDate>
+<category>cURL and libcurl</category>
+<category>podcast</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=22090</guid>
+<description>Over in our podcast Fossified, we did an entire episode dedicated to curl&amp;#8217;s 25th birthday. Enjoy!</description>
+<content:encoded>
+&lt;p&gt;Over in our podcast &lt;a href="https://fossified.com/"&gt;Fossified&lt;/a&gt;, we did &lt;a href="https://pod.fossified.com/2023/03/19/s01e02.html"&gt;an entire episode dedicated to curl&amp;#8217;s 25th birthday&lt;/a&gt;.&lt;/p&gt;
+
+
+
+&lt;p&gt;Enjoy!&lt;/p&gt;
+</content:encoded>
+</item>
+<item>
+<title>curl 25 years online celebration</title>
+<link>https://daniel.haxx.se/blog/2023/03/10/curl-25-years-online-celebration/</link>
+<comments>https://daniel.haxx.se/blog/2023/03/10/curl-25-years-online-celebration/#comments</comments>
+<dc:creator>Daniel Stenberg</dc:creator>
+<pubDate>Fri, 10 Mar 2023 09:15:16 +0000</pubDate>
+<category>cURL and libcurl</category>
+<guid isPermaLink="false">https://daniel.haxx.se/blog/?p=21645</guid>
+<description>curl turns 25 years old and what better way to celebrate this than to join fellow curl friends, developers and fans online on the exact birthday? At 17:00 UTC March 20, 2023. We run an Online birthday party open for everyone to join. Consider muting yourself when you join, but feel encouraged to leave the &amp;#8230; &lt;a href="https://daniel.haxx.se/blog/2023/03/10/curl-25-years-online-celebration/" class="more-link"&gt;Continue reading &lt;span class="screen-reader-text"&gt;curl 25 years online celebration&lt;/span&gt; &lt;span class="meta-nav"&gt;&amp;#8594;&lt;/span&gt;&lt;/a&gt;</description>
+<content:encoded>
+&lt;p&gt;curl turns 25 years old and what better way to celebrate this than to join fellow curl friends, developers and fans online on the exact birthday?&lt;/p&gt;
+
+
+
+&lt;p&gt;At &lt;a href="https://www.timeanddate.com/worldclock/fixedtime.html?msg=curl+25+party&amp;amp;iso=20230320T18&amp;amp;p1=239"&gt;17:00 UTC March 20, 2023&lt;/a&gt;. We run an &lt;em&gt;Online birthday party&lt;/em&gt; open for everyone to join.&lt;/p&gt;
+
+
+
+&lt;p&gt;Consider muting yourself when you join, but feel encouraged to leave the camera on. Click the link above to get the time for your location. It is within this weird period between the US has switched to daylight saving time while Europe has not yet switched.&lt;/p&gt;
+
+
+&lt;div class="wp-block-image"&gt;
+&lt;figure class="alignright size-full is-resized"&gt;&lt;a href="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/PXL_20230223_1353539771.jpg"&gt;&lt;img decoding="async" loading="lazy" src="https://daniel.haxx.se/blog/wp-content/uploads/2023/03/PXL_20230223_1353539771.jpg" alt="" class="wp-image-22019" width="189" height="264"/&gt;&lt;/a&gt;&lt;figcaption class="wp-element-caption"&gt;Bowmore. 25 years old.&lt;/figcaption&gt;&lt;/figure&gt;&lt;/div&gt;
+
+
+&lt;p&gt;If it works out, I will do a presentation walking over the bigger changes done over the years while sipping on the 25 year old single malt I have arranged for the occasion. With the ability for everyone to ask questions or otherwise contribute.&lt;/p&gt;
+
+
+
+&lt;p&gt;The meeting might be recorded and made available for watching after the fact.&lt;/p&gt;
+
+
+
+&lt;p&gt;The actual links needed to join or watch the celebrations will be added to this blog post closer to the event start.&lt;/p&gt;
+
+
+
+&lt;p class="has-text-align-center"&gt;&lt;strong&gt;Date: March 20 2023&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;Time: &lt;a href="https://www.timeanddate.com/worldclock/fixedtime.html?msg=curl+25+party&amp;amp;iso=20230320T18&amp;amp;p1=239"&gt;17:00 UTC March 20, 2023&lt;/a&gt;&lt;/strong&gt;&lt;br&gt;&lt;strong&gt;Where: Online&lt;/strong&gt;&lt;/p&gt;
+
+
+
+&lt;p&gt;The event will be live-streamed.&lt;/p&gt;
+
+
+
+&lt;p class="has-text-align-center"&gt;&lt;strong&gt;&lt;s&gt;Zoom meeting link&lt;/s&gt;&lt;/strong&gt;&lt;/p&gt;
+
+
+
+&lt;h2 class="wp-block-heading"&gt;Say congrats?&lt;/h2&gt;
+
+
+
+&lt;p&gt;Please express whatever you feel like in regards to curl&amp;#8217;s 25th birthday in &lt;a href="https://github.com/curl/curl/discussions/10465"&gt;this discussion thread setup for this purpose&lt;/a&gt;.&lt;/p&gt;
+</content:encoded>
+<wfw:commentRss>https://daniel.haxx.se/blog/2023/03/10/curl-25-years-online-celebration/feed/</wfw:commentRss>
+<slash:comments>23</slash:comments>
+</item>
+</channel>
+</rss>

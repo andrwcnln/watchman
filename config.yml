@@ -1,0 +1,28 @@
+edent:
+    url: https://shkspr.mobi/blog/feed/atom/
+    article: entry
+    content: content
+    title: title
+    author: author
+    publishDate: published
+    dateFormat: '%Y-%m-%dT%H:%M:%SZ'
+    fulltext: true
+badger:
+    url: https://daniel.haxx.se/blog/feed/ 
+    article: item
+    content: content:encoded
+    title: title
+    author: dc:creator
+    publishDate: pubDate
+    dateFormat: '%a, %d %b %Y %H:%M:%S %z'
+    fulltext: true
+simon:
+    url: https://simonwillison.net/atom/everything/ 
+    article: entry
+    content: summary
+    title: title
+    author: id
+    publishDate: updated
+    dateFormat: '%Y-%m-%dT%H:%M:%S+00:00'
+    fulltext: true
+
