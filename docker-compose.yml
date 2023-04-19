@@ -1,0 +1,11 @@
+version: "2.4"
+
+services:
+  detolf:
+    platform: "linux/arm64/v8"
+    image: watchman:latest
+    container_name: watchman
+    restart: always
+    build:
+      context: build
+      dockerfile: Dockerfile

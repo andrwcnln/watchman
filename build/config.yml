@@ -1,28 +1,43 @@
+guardian:
+    url: https://www.theguardian.com/world/series/first-edition/rss
+    fulltext: false
+    article: item
+    content: link
+    title: title
+    authorIncluded: true
+    author: dc:creator
+    publishDate: dc:date
+    dateFormat: '%Y-%m-%dT%H:%M:%SZ'
+    tag: div
+    id: maincontent
 edent:
     url: https://shkspr.mobi/blog/feed/atom/
+    fulltext: true
     article: entry
     content: content
     title: title
+    authorIncluded: true
     author: author
     publishDate: published
     dateFormat: '%Y-%m-%dT%H:%M:%SZ'
-    fulltext: true
 badger:
     url: https://daniel.haxx.se/blog/feed/ 
+    fulltext: true
     article: item
     content: content:encoded
     title: title
+    authorIncluded: true
     author: dc:creator
     publishDate: pubDate
     dateFormat: '%a, %d %b %Y %H:%M:%S %z'
-    fulltext: true
 simon:
     url: https://simonwillison.net/atom/everything/ 
+    fulltext: true
     article: entry
     content: summary
     title: title
-    author: id
+    authorIncluded: false
+    author: Simon Willison
     publishDate: updated
     dateFormat: '%Y-%m-%dT%H:%M:%S+00:00'
-    fulltext: true
 
