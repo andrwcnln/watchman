@@ -1,2 +1,3 @@
-15 15 * * * python /main.py
-
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PYTHONPATH=/usr/bin/local/python3
+15 7 * * * python3 /main.py >> /var/log/cron.log 2>&1

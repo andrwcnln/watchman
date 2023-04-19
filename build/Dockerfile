@@ -1,10 +1,16 @@
 FROM python:3
 
-WORKDIR usr/src/app
+COPY . .
+RUN python3.11 -m pip install --no-cache-dir -r requirements.txt
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN touch /var/log/cron.log
 
-RUN crontab crontab
+RUN apt-get update \  
+&& apt-get install cron -y
 
-CMD ["crond", "-f"]
+RUN chmod +x main.py
+
+RUN crontab crontab 
+
+CMD cron -f
+

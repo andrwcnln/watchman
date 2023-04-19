@@ -4,7 +4,9 @@
 # a script to create a newspaper-esque pdf from rss feeds
 # and send it to my kindle
 
-with open('edition.txt','r+') as f:
+#!/usr/local/bin/python3
+
+with open('/edition.txt','r+') as f:
     currentEdition = str(f.read())
     nextEdition = int(currentEdition) + 1
     f.seek(0)
@@ -21,6 +23,8 @@ from dotenv import load_dotenv
 
 from email.message import EmailMessage
 
+import PIL
+from PIL import Image
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.lib.units import inch, cm
 from reportlab.lib.styles import ParagraphStyle
@@ -115,7 +119,7 @@ def createPDF(parsed):
     try:
         print('[' + str(datetime.now()) + '] Creating pdf...')
         today = date.today()
-        directory = 'pdfs/'
+        directory = '/pdfs/'
         filename = today.strftime('%d_%m_%Y') + '.pdf'
         canvas = Canvas(directory + filename)
         # PDFTitle(canvas,today)
@@ -228,7 +232,7 @@ def getRSS(parsed, site, config):
 
 def checkCache(soup, site):
     try:
-        filename = 'cache/' + site + '.cache'
+        filename = '/cache/' + site + '.cache'
         with open(filename, 'r') as f:
             content = f.read()
         if content == soup:
@@ -252,18 +256,18 @@ def checkCache(soup, site):
 
 
 def saveCache(soup, site):
-    filename = 'cache/' + site + '.cache'
+    filename = '/cache/' + site + '.cache'
     with open(filename, 'w') as f:
         f.write(soup)
 
 
 def clearCache():
-    os.system('rm -rf cache')
-    os.system('mkdir cache')
+    os.system('rm -rf /cache')
+    os.system('mkdir /cache')
 
 
 def loadConfig():
-    with open('config.yml', 'r+') as f:
+    with open('/config.yml', 'r+') as f:
         try:
             config = yaml.safe_load(f)
             return config
