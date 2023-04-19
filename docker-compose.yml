@@ -1,7 +1,7 @@
 version: "2.4"
 
 services:
-  detolf:
+  watchman:
     platform: "linux/arm64/v8"
     image: watchman:latest
     container_name: watchman
