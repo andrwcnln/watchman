@@ -6,6 +6,7 @@ services:
     image: watchman:latest
     container_name: watchman
     restart: always
+    user: root
     build:
       context: build
       dockerfile: Dockerfile

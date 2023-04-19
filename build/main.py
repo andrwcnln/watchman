@@ -1,5 +1,5 @@
 # author: @andrwcnln
-# v1.0
+# v1.1
 # apr 2023
 # a script to create a newspaper-esque pdf from rss feeds
 # and send it to my kindle
