@@ -1,6 +1,6 @@
 # author: @andrwcnln
-# v1.1
-# apr 2023
+# v1.2
+# jan 2024
 # a script to create a newspaper-esque pdf from rss feeds
 # and send it to my kindle
 
@@ -120,7 +120,7 @@ def createPDF(parsed):
         print('[' + str(datetime.now()) + '] Creating pdf...')
         today = date.today()
         directory = '/pdfs/'
-        filename = today.strftime('%d_%m_%Y') + '.pdf'
+        filename = today.strftime('%Y_%m_%d') + '.pdf'
         canvas = Canvas(directory + filename)
         # PDFTitle(canvas,today)
         doc = BaseDocTemplate(directory + filename,
